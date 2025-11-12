@@ -1,36 +1,25 @@
 # bishengjdk-25
 
-#### Description
-BiSheng JDK 25 is a high-performance, production-ready distribution of OpenJDK 25.
+## Description
 
-#### Software Architecture
-Software architecture description
+BiSheng JDK is a high-performance, production-ready downstream distribution of OpenJDK. As the in-house OpenJDK implementation at Huawei, BiSheng JDK runs on more than 500 products within Huawei, accumulating a large number of usage scenarios and problems and demands from java developers, solving many problems encountered in the actual operation of the business, and typically optimized on the ARM architecture. BiSheng JDK is suited for big data applications with high performance. As a "friendly fork" project under the same license as the upstream OpenJDK project, BiSheng JDK continues to contribute to the OpenJDK community all along.
 
-#### Installation
+## Platform
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+BiSheng JDK currently supports `Linux/AArch64, Linux/x86_64`.
 
-#### Instructions
+## Build platforms
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+About the build platforms for BiSheng JDK, details will follow.
 
-#### Contribution
+## License
 
-1.  Fork the repository
-2.  Create Feat_xxx branch
-3.  Commit your code
-4.  Create Pull Request
+BiSheng JDK is licensed under GPLv2 with Classpath Exception. For the details, see [License](https://gitee.com/openeuler/bishengjdk-25/blob/master/LICENSE).
 
+## Installation
 
-#### Gitee Feature
+See the [Installation Guide](),details will follow.
 
-1.  You can use Readme\_XXX.md to support different languages, such as Readme\_en.md, Readme\_zh.md
-2.  Gitee blog [blog.gitee.com](https://blog.gitee.com)
-3.  Explore open source project [https://gitee.com/explore](https://gitee.com/explore)
-4.  The most valuable open source project [GVP](https://gitee.com/gvp)
-5.  The manual of Gitee [https://gitee.com/help](https://gitee.com/help)
-6.  The most popular members  [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+## How to contribute
+
+Contributions are welcomed. Please [send an email to dev](https://openeuler.org/zh/community/mailing-list) or [create a new issue](https://gitee.com/openeuler/bishengjdk-25/issues) if you find a bug or have new ideas.
