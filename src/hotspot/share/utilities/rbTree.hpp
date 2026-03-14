@@ -199,7 +199,7 @@ private:
   template <typename CMP, typename RET, typename ARG1, typename ARG2, typename = void>
   struct has_cmp_type : std::false_type {};
   template <typename CMP, typename RET, typename ARG1, typename ARG2>
-  struct has_cmp_type<CMP, RET, ARG1, ARG2, decltype((void)static_cast<RET(*)(ARG1, ARG2)>(CMP::cmp), void())> : std::true_type {};
+  struct has_cmp_type<CMP, RET, ARG1, ARG2, decltype(static_cast<RET(*)(ARG1, ARG2)>(CMP::cmp), void())> : std::true_type {};
 
   template <typename CMP>
   static constexpr bool HasKeyComparator = has_cmp_type<CMP, int, K, K>::value;
