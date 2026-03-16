@@ -201,7 +201,9 @@ class MacroAssembler: public Assembler {
   inline void cmpw(Register Rd, T imm)  { subsw(zr, Rd, imm); }
 
   inline void cmp(Register Rd, unsigned char imm8)  { subs(zr, Rd, imm8); }
+#if (__GNUC__ > 7) || ((__GNUC__ == 7) && (__GNUC_MINOR__ > 3))
   inline void cmp(Register Rd, unsigned imm) = delete;
+#endif
 
   template<class T>
   inline void cmnw(Register Rd, T imm) { addsw(zr, Rd, imm); }
