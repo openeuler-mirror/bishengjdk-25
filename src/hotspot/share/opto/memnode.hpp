@@ -1142,6 +1142,9 @@ class MemBarNode: public MultiNode {
     TrailingLoadStore,
     LeadingLoadStore,
     TrailingExpandedArrayCopy
+#ifdef AARCH64
+    , StandaloneRelease
+#endif // AARCH64
   } _kind;
 
 #ifdef ASSERT
@@ -1178,6 +1181,10 @@ public:
   bool trailing() const { return _kind == TrailingLoad || _kind == TrailingStore || _kind == TrailingLoadStore; }
   bool leading() const { return _kind == LeadingStore || _kind == LeadingLoadStore; }
   bool standalone() const { return _kind == Standalone; }
+#ifdef AARCH64
+  void set_standalone_release() { _kind = StandaloneRelease; }
+  bool standalone_release() const { return _kind == StandaloneRelease; }
+#endif // AARCH64
   void set_trailing_expanded_array_copy() { _kind = TrailingExpandedArrayCopy; }
   bool trailing_expanded_array_copy() const { return _kind == TrailingExpandedArrayCopy; }
 
