@@ -583,7 +583,11 @@ public abstract class Toolkit {
                 toolkit = new HeadlessToolkit(toolkit);
             }
             if (!GraphicsEnvironment.isHeadless()) {
-                loadAssistiveTechnologies();
+                try {
+                    loadAssistiveTechnologies();
+                } catch (AWTError error) {
+                    // ignore silently
+                }
             }
         }
         return toolkit;
