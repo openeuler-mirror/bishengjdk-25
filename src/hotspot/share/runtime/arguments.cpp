@@ -2488,6 +2488,15 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, JVMFlagOrigin
     // -D
     } else if (match_option(option, "-D", &tail)) {
       const char* value;
+#ifndef AARCH64
+        if (match_option(option, "-DGZIP_USE_KAE=", &value)) {
+          if (strcmp(value, "true") == 0) {
+            jio_fprintf(defaultStream::output_stream(),
+            "-DGZIP_USE_KAE is not supported. This system property is valid only on aarch64 architecture machines.\n"
+            "The compression action is performed using the native compression capability of the JDK.\n");
+          }
+        }
+#endif
       if (match_option(option, "-Djava.endorsed.dirs=", &value) &&
             *value!= '\0' && strcmp(value, "\"\"") != 0) {
         // abort if -Djava.endorsed.dirs is set

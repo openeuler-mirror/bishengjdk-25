@@ -113,6 +113,18 @@ public class Inflater implements AutoCloseable {
 
     /**
      * Creates a new decompressor.
+     * This method is mainly used to support the KAE-zip feature.
+     *
+     * @param windowBits compression format (-15~31)
+     * @param flushKAE inflate flush type (0~6)
+     */
+    @SuppressWarnings("this-escape")
+    public Inflater(int windowBits, int flushKAE) {
+        this.zsRef = new InflaterZStreamRef(this, initKAE(windowBits, flushKAE));
+    }
+
+    /**
+     * Creates a new decompressor.
      */
     public Inflater() {
         this(false);
@@ -681,6 +693,17 @@ public class Inflater implements AutoCloseable {
 
     /**
      * Resets inflater so that a new set of input data can be processed.
+     * This method is mainly used to support the KAE-zip feature.
+     */
+    public void resetKAE() {
+        synchronized (zsRef) {
+            ensureOpen();
+            reset(zsRef.address());
+        }
+    }
+
+    /**
+     * Resets inflater so that a new set of input data can be processed.
      * @throws IllegalStateException if the Inflater is closed
      */
     public void reset() {
@@ -744,6 +767,7 @@ public class Inflater implements AutoCloseable {
 
     private static native void initIDs();
     private static native long init(boolean nowrap);
+    private static native long initKAE(int windowBits, int flushKAE);
     private static native void setDictionary(long addr, byte[] b, int off,
                                              int len);
     private static native void setDictionaryBuffer(long addr, long bufAddress, int len);
