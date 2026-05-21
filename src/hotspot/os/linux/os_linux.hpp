@@ -129,6 +129,7 @@ class os::Linux {
 
   static void libpthread_init();
   static void sched_getcpu_init();
+  static void chose_numa_nodes();
   static bool libnuma_init();
   static void* libnuma_dlsym(void* handle, const char* name);
   // libnuma v2 (libnuma_1.2) symbols
@@ -220,25 +221,41 @@ class os::Linux {
   typedef int (*sched_getcpu_func_t)(void);
   typedef int (*numa_node_to_cpus_func_t)(int node, unsigned long *buffer, int bufferlen);
   typedef int (*numa_node_to_cpus_v2_func_t)(int node, void *mask);
+  typedef int (*numa_node_of_cpu_func_t)(int cpu);
+  typedef int (*numa_num_configured_cpus_func_t)(void);
   typedef int (*numa_max_node_func_t)(void);
   typedef int (*numa_num_configured_nodes_func_t)(void);
   typedef int (*numa_available_func_t)(void);
   typedef int (*numa_tonode_memory_func_t)(void *start, size_t size, int node);
   typedef void (*numa_interleave_memory_func_t)(void *start, size_t size, unsigned long *nodemask);
   typedef void (*numa_interleave_memory_v2_func_t)(void *start, size_t size, struct bitmask* mask);
+  typedef struct bitmask* (*numa_get_mems_allowed_func_t)(void);
+  typedef struct bitmask* (*numa_allocate_cpumask_func_t)(void);
+  typedef struct bitmask* (*numa_allocate_nodemask_func_t)(void);
+  typedef int (*numa_sched_setaffinity_func_t)(int pid, struct bitmask* mask);
+  typedef int (*numa_bitmask_nbytes_func_t)(struct bitmask* mask);
+  typedef struct bitmask* (*numa_bitmask_setbit_func_t)(struct bitmask* mask, int len);
+  typedef struct bitmask* (*numa_bitmask_clearall_func_t)(struct bitmask* mask);
   typedef struct bitmask* (*numa_get_membind_func_t)(void);
   typedef struct bitmask* (*numa_get_interleave_mask_func_t)(void);
   typedef struct bitmask* (*numa_get_run_node_mask_func_t)(void);
   typedef long (*numa_move_pages_func_t)(int pid, unsigned long count, void **pages, const int *nodes, int *status, int flags);
   typedef void (*numa_set_preferred_func_t)(int node);
+  typedef struct bitmask* (*numa_parse_nodestring_all_func_t)(const char*);
+  typedef int (*numa_run_on_node_mask_func_t)(struct bitmask* mask);
+  typedef void (*numa_set_membind_func_t)(struct bitmask* mask);
+  typedef int (*numa_bitmask_equal_func_t)(struct bitmask* mask, struct bitmask* mask1);
+  typedef void (*numa_bitmask_free_func_t)(struct bitmask* mask);
   typedef void (*numa_set_bind_policy_func_t)(int policy);
   typedef int (*numa_bitmask_isbitset_func_t)(struct bitmask *bmp, unsigned int n);
-  typedef int (*numa_bitmask_equal_func_t)(struct bitmask *bmp1, struct bitmask *bmp2);
+  // typedef int (*numa_bitmask_equal_func_t)(struct bitmask *bmp1, struct bitmask *bmp2);
   typedef int (*numa_distance_func_t)(int node1, int node2);
 
   static sched_getcpu_func_t _sched_getcpu;
   static numa_node_to_cpus_func_t _numa_node_to_cpus;
   static numa_node_to_cpus_v2_func_t _numa_node_to_cpus_v2;
+  static numa_node_of_cpu_func_t _numa_node_of_cpu;
+  static numa_num_configured_cpus_func_t _numa_num_configured_cpus;
   static numa_max_node_func_t _numa_max_node;
   static numa_num_configured_nodes_func_t _numa_num_configured_nodes;
   static numa_available_func_t _numa_available;
@@ -250,10 +267,21 @@ class os::Linux {
   static numa_bitmask_equal_func_t _numa_bitmask_equal;
   static numa_distance_func_t _numa_distance;
   static numa_get_membind_func_t _numa_get_membind;
+  static numa_get_mems_allowed_func_t _numa_get_mems_allowed;
+  static numa_allocate_cpumask_func_t _numa_allocate_cpumask;
+  static numa_allocate_nodemask_func_t _numa_allocate_nodemask;
+  static numa_sched_setaffinity_func_t _numa_sched_setaffinity;
+  static numa_bitmask_nbytes_func_t _numa_bitmask_nbytes;
+  static numa_bitmask_setbit_func_t _numa_bitmask_setbit;
+  static numa_bitmask_clearall_func_t _numa_bitmask_clearall;
   static numa_get_run_node_mask_func_t _numa_get_run_node_mask;
   static numa_get_interleave_mask_func_t _numa_get_interleave_mask;
   static numa_move_pages_func_t _numa_move_pages;
   static numa_set_preferred_func_t _numa_set_preferred;
+  static numa_parse_nodestring_all_func_t _numa_parse_nodestring_all;
+  static numa_run_on_node_mask_func_t _numa_run_on_node_mask;
+  static numa_set_membind_func_t _numa_set_membind;
+  static numa_bitmask_free_func_t _numa_bitmask_free;
   static unsigned long* _numa_all_nodes;
   static struct bitmask* _numa_all_nodes_ptr;
   static struct bitmask* _numa_nodes_ptr;
@@ -264,6 +292,8 @@ class os::Linux {
   static void set_sched_getcpu(sched_getcpu_func_t func) { _sched_getcpu = func; }
   static void set_numa_node_to_cpus(numa_node_to_cpus_func_t func) { _numa_node_to_cpus = func; }
   static void set_numa_node_to_cpus_v2(numa_node_to_cpus_v2_func_t func) { _numa_node_to_cpus_v2 = func; }
+  static void set_numa_node_of_cpu(numa_node_of_cpu_func_t func) { _numa_node_of_cpu = func; }
+  static void set_numa_num_configured_cpus(numa_num_configured_cpus_func_t func) { _numa_num_configured_cpus = func; }
   static void set_numa_max_node(numa_max_node_func_t func) { _numa_max_node = func; }
   static void set_numa_num_configured_nodes(numa_num_configured_nodes_func_t func) { _numa_num_configured_nodes = func; }
   static void set_numa_available(numa_available_func_t func) { _numa_available = func; }
@@ -276,9 +306,20 @@ class os::Linux {
   static void set_numa_distance(numa_distance_func_t func) { _numa_distance = func; }
   static void set_numa_get_membind(numa_get_membind_func_t func) { _numa_get_membind = func; }
   static void set_numa_get_run_node_mask(numa_get_run_node_mask_func_t func) { _numa_get_run_node_mask = func; }
+  static void set_numa_get_mems_allowed(numa_get_mems_allowed_func_t func) { _numa_get_mems_allowed = func; }
+  static void set_numa_allocate_cpumask(numa_allocate_cpumask_func_t func) { _numa_allocate_cpumask = func; }
+  static void set_numa_allocate_nodemask(numa_allocate_nodemask_func_t func) { _numa_allocate_nodemask = func; }
+  static void set_numa_sched_setaffinity(numa_sched_setaffinity_func_t func) { _numa_sched_setaffinity = func; }
+  static void set_numa_bitmask_nbytes(numa_bitmask_nbytes_func_t func) { _numa_bitmask_nbytes = func; }
+  static void set_numa_bitmask_setbit(numa_bitmask_setbit_func_t func) { _numa_bitmask_setbit = func; }
+  static void set_numa_bitmask_clearall(numa_bitmask_clearall_func_t func) { _numa_bitmask_clearall = func; }
   static void set_numa_get_interleave_mask(numa_get_interleave_mask_func_t func) { _numa_get_interleave_mask = func; }
   static void set_numa_move_pages(numa_move_pages_func_t func) { _numa_move_pages = func; }
   static void set_numa_set_preferred(numa_set_preferred_func_t func) { _numa_set_preferred = func; }
+  static void set_numa_parse_nodestring_all(numa_parse_nodestring_all_func_t func) { _numa_parse_nodestring_all = func; }
+  static void set_numa_run_on_node_mask(numa_run_on_node_mask_func_t func) { _numa_run_on_node_mask = func; }
+  static void set_numa_set_membind(numa_set_membind_func_t func) { _numa_set_membind = func; }
+  static void set_numa_bitmask_free(numa_bitmask_free_func_t func) { _numa_bitmask_free = func; }
   static void set_numa_all_nodes(unsigned long* ptr) { _numa_all_nodes = ptr; }
   static void set_numa_all_nodes_ptr(struct bitmask **ptr) { _numa_all_nodes_ptr = (ptr == nullptr ? nullptr : *ptr); }
   static void set_numa_nodes_ptr(struct bitmask **ptr) { _numa_nodes_ptr = (ptr == nullptr ? nullptr : *ptr); }
@@ -422,6 +463,7 @@ class os::Linux {
   }
   // Check if cpu and memory nodes are aligned, returns true if nodes misalign
   static bool mem_and_cpu_node_mismatch() {
+    NOT_AARCH64(return false;)
     struct bitmask* mem_nodes_bitmask = Linux::_numa_membind_bitmask;
     if (Linux::is_running_in_interleave_mode()) {
       mem_nodes_bitmask = Linux::_numa_interleave_bitmask;
@@ -476,6 +518,58 @@ class os::Linux {
   // otherwise does nothing and returns -2.
   static int malloc_info(FILE* stream);
 #endif // GLIBC
+
+  static bitmask* numa_parse_nodestring_all(const char* s) {
+    return _numa_parse_nodestring_all != NULL ? _numa_parse_nodestring_all(s) : NULL;
+  }
+
+  static int numa_num_configured_cpus() {
+    return _numa_num_configured_cpus != NULL ? _numa_num_configured_cpus() : 0;
+  }
+
+  static bitmask* numa_allocate_cpumask() {
+    return _numa_allocate_cpumask != NULL ? _numa_allocate_cpumask() : NULL;
+  }
+
+  static bitmask* numa_allocate_nodemask() {
+    return _numa_allocate_nodemask != NULL ? _numa_allocate_nodemask() : NULL;
+  }
+
+  static int numa_sched_setaffinity(int pid, struct bitmask* mask) {
+    return _numa_sched_setaffinity != NULL ? _numa_sched_setaffinity(pid, mask) : -1;
+  }
+
+  static int numa_bitmask_nbytes(struct bitmask* mask) {
+    return _numa_bitmask_nbytes != NULL ? _numa_bitmask_nbytes(mask) : 0;
+  }
+
+  static bitmask* numa_bitmask_setbit(struct bitmask* mask, int len) {
+    return _numa_bitmask_setbit != NULL ? _numa_bitmask_setbit(mask, len) : NULL;
+  }
+
+  static bitmask* numa_bitmask_clearall(struct bitmask* mask) {
+    return _numa_bitmask_clearall != NULL ? _numa_bitmask_clearall(mask) : NULL;
+  }
+
+  static int numa_run_on_node_mask(bitmask* bitmask) {
+    return _numa_run_on_node_mask != NULL ? _numa_run_on_node_mask(bitmask) : -1;
+  }
+
+  static int numa_bitmask_equal(bitmask* bitmask, struct bitmask* bitmask1) {
+    return _numa_bitmask_equal != NULL ? _numa_bitmask_equal(bitmask, bitmask1) : 1;
+  }
+
+  static void numa_set_membind(bitmask* bitmask) {
+    if (_numa_set_membind != NULL) {
+      _numa_set_membind(bitmask);
+    }
+  }
+
+  static void numa_bitmask_free(bitmask* bitmask) {
+    if (_numa_bitmask_free != NULL) {
+      _numa_bitmask_free(bitmask);
+    }
+  }
 };
 
 #endif // OS_LINUX_OS_LINUX_HPP

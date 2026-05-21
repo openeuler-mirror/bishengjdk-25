@@ -3269,6 +3269,10 @@ bool os::Linux::libnuma_init() {
                                            libnuma_dlsym(handle, "numa_node_to_cpus")));
       set_numa_node_to_cpus_v2(CAST_TO_FN_PTR(numa_node_to_cpus_v2_func_t,
                                               libnuma_v2_dlsym(handle, "numa_node_to_cpus")));
+      set_numa_node_of_cpu(CAST_TO_FN_PTR(numa_node_of_cpu_func_t,
+                                          libnuma_dlsym(handle, "numa_node_of_cpu")));
+      set_numa_num_configured_cpus(CAST_TO_FN_PTR(numa_num_configured_cpus_func_t,
+                                                  libnuma_dlsym(handle, "numa_num_configured_cpus")));
       set_numa_max_node(CAST_TO_FN_PTR(numa_max_node_func_t,
                                        libnuma_dlsym(handle, "numa_max_node")));
       set_numa_num_configured_nodes(CAST_TO_FN_PTR(numa_num_configured_nodes_func_t,
@@ -3280,7 +3284,7 @@ bool os::Linux::libnuma_init() {
       set_numa_interleave_memory(CAST_TO_FN_PTR(numa_interleave_memory_func_t,
                                                 libnuma_dlsym(handle, "numa_interleave_memory")));
       set_numa_interleave_memory_v2(CAST_TO_FN_PTR(numa_interleave_memory_v2_func_t,
-                                                libnuma_v2_dlsym(handle, "numa_interleave_memory")));
+                                                   libnuma_v2_dlsym(handle, "numa_interleave_memory")));
       set_numa_set_bind_policy(CAST_TO_FN_PTR(numa_set_bind_policy_func_t,
                                               libnuma_dlsym(handle, "numa_set_bind_policy")));
       set_numa_bitmask_isbitset(CAST_TO_FN_PTR(numa_bitmask_isbitset_func_t,
@@ -3291,12 +3295,39 @@ bool os::Linux::libnuma_init() {
                                        libnuma_dlsym(handle, "numa_distance")));
       set_numa_get_membind(CAST_TO_FN_PTR(numa_get_membind_func_t,
                                           libnuma_v2_dlsym(handle, "numa_get_membind")));
+      set_numa_get_mems_allowed(CAST_TO_FN_PTR(numa_get_mems_allowed_func_t,
+                                               libnuma_dlsym(handle, "numa_get_mems_allowed")));
+      set_numa_allocate_cpumask(CAST_TO_FN_PTR(numa_allocate_cpumask_func_t,
+                                               libnuma_dlsym(handle, "numa_allocate_cpumask")));
+      set_numa_allocate_nodemask(CAST_TO_FN_PTR(numa_allocate_nodemask_func_t,
+                                                libnuma_dlsym(handle, "numa_allocate_nodemask")));
+      set_numa_sched_setaffinity(CAST_TO_FN_PTR(numa_sched_setaffinity_func_t,
+                                                libnuma_dlsym(handle, "numa_sched_setaffinity")));
+      set_numa_bitmask_nbytes(CAST_TO_FN_PTR(numa_bitmask_nbytes_func_t,
+                                             libnuma_dlsym(handle, "numa_bitmask_nbytes")));
+      set_numa_bitmask_setbit(CAST_TO_FN_PTR(numa_bitmask_setbit_func_t,
+                                             libnuma_dlsym(handle, "numa_bitmask_setbit")));
+      set_numa_bitmask_clearall(CAST_TO_FN_PTR(numa_bitmask_clearall_func_t,
+                                             libnuma_dlsym(handle, "numa_bitmask_clearall")));
+
       set_numa_get_interleave_mask(CAST_TO_FN_PTR(numa_get_interleave_mask_func_t,
                                                   libnuma_v2_dlsym(handle, "numa_get_interleave_mask")));
       set_numa_move_pages(CAST_TO_FN_PTR(numa_move_pages_func_t,
                                          libnuma_dlsym(handle, "numa_move_pages")));
       set_numa_set_preferred(CAST_TO_FN_PTR(numa_set_preferred_func_t,
                                             libnuma_dlsym(handle, "numa_set_preferred")));
+      set_numa_get_run_node_mask(CAST_TO_FN_PTR(numa_get_run_node_mask_func_t,
+                                                libnuma_v2_dlsym(handle, "numa_get_run_node_mask")));
+      set_numa_parse_nodestring_all(CAST_TO_FN_PTR(numa_parse_nodestring_all_func_t,
+                                                   libnuma_dlsym(handle, "numa_parse_nodestring_all")));
+      set_numa_run_on_node_mask(CAST_TO_FN_PTR(numa_run_on_node_mask_func_t,
+                                               libnuma_v2_dlsym(handle, "numa_run_on_node_mask")));
+      set_numa_bitmask_equal(CAST_TO_FN_PTR(numa_bitmask_equal_func_t,
+                                            libnuma_v2_dlsym(handle, "numa_bitmask_equal")));
+      set_numa_set_membind(CAST_TO_FN_PTR(numa_set_membind_func_t,
+                                          libnuma_v2_dlsym(handle, "numa_set_membind")));
+      set_numa_bitmask_free(CAST_TO_FN_PTR(numa_bitmask_free_func_t,
+                                           libnuma_dlsym(handle, "numa_bitmask_free")));
       set_numa_get_run_node_mask(CAST_TO_FN_PTR(numa_get_run_node_mask_func_t,
                                                 libnuma_v2_dlsym(handle, "numa_get_run_node_mask")));
 
@@ -3306,6 +3337,8 @@ bool os::Linux::libnuma_init() {
         set_numa_nodes_ptr((struct bitmask **)libnuma_dlsym(handle, "numa_nodes_ptr"));
         set_numa_interleave_bitmask(_numa_get_interleave_mask());
         set_numa_membind_bitmask(_numa_get_membind());
+        set_numa_cpunodebind_bitmask(_numa_get_run_node_mask());
+        AARCH64_ONLY(chose_numa_nodes();)
         set_numa_cpunodebind_bitmask(_numa_get_run_node_mask());
         // Create an index -> node mapping, since nodes are not always consecutive
         _nindex_to_node = new (mtInternal) GrowableArray<int>(0, mtInternal);
@@ -3475,6 +3508,8 @@ GrowableArray<int>* os::Linux::_nindex_to_node;
 os::Linux::sched_getcpu_func_t os::Linux::_sched_getcpu;
 os::Linux::numa_node_to_cpus_func_t os::Linux::_numa_node_to_cpus;
 os::Linux::numa_node_to_cpus_v2_func_t os::Linux::_numa_node_to_cpus_v2;
+os::Linux::numa_node_of_cpu_func_t os::Linux::_numa_node_of_cpu;
+os::Linux::numa_num_configured_cpus_func_t os::Linux::_numa_num_configured_cpus;
 os::Linux::numa_max_node_func_t os::Linux::_numa_max_node;
 os::Linux::numa_num_configured_nodes_func_t os::Linux::_numa_num_configured_nodes;
 os::Linux::numa_available_func_t os::Linux::_numa_available;
@@ -3486,11 +3521,22 @@ os::Linux::numa_bitmask_isbitset_func_t os::Linux::_numa_bitmask_isbitset;
 os::Linux::numa_bitmask_equal_func_t os::Linux::_numa_bitmask_equal;
 os::Linux::numa_distance_func_t os::Linux::_numa_distance;
 os::Linux::numa_get_membind_func_t os::Linux::_numa_get_membind;
+os::Linux::numa_get_mems_allowed_func_t os::Linux::_numa_get_mems_allowed;
+os::Linux::numa_allocate_cpumask_func_t os::Linux::_numa_allocate_cpumask;
+os::Linux::numa_allocate_nodemask_func_t os::Linux::_numa_allocate_nodemask;
+os::Linux::numa_sched_setaffinity_func_t os::Linux::_numa_sched_setaffinity;
+os::Linux::numa_bitmask_nbytes_func_t os::Linux::_numa_bitmask_nbytes;
+os::Linux::numa_bitmask_setbit_func_t os::Linux::_numa_bitmask_setbit;
+os::Linux::numa_bitmask_clearall_func_t os::Linux::_numa_bitmask_clearall;
 os::Linux::numa_get_interleave_mask_func_t os::Linux::_numa_get_interleave_mask;
 os::Linux::numa_get_run_node_mask_func_t os::Linux::_numa_get_run_node_mask;
 os::Linux::numa_move_pages_func_t os::Linux::_numa_move_pages;
 os::Linux::numa_set_preferred_func_t os::Linux::_numa_set_preferred;
 os::Linux::NumaAllocationPolicy os::Linux::_current_numa_policy;
+os::Linux::numa_parse_nodestring_all_func_t os::Linux::_numa_parse_nodestring_all;
+os::Linux::numa_run_on_node_mask_func_t os::Linux::_numa_run_on_node_mask;
+os::Linux::numa_set_membind_func_t os::Linux::_numa_set_membind;
+os::Linux::numa_bitmask_free_func_t os::Linux::_numa_bitmask_free;
 unsigned long* os::Linux::_numa_all_nodes;
 struct bitmask* os::Linux::_numa_all_nodes_ptr;
 struct bitmask* os::Linux::_numa_nodes_ptr;

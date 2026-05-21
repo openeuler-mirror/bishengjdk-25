@@ -128,6 +128,25 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Always merge DMB instructions in code emission")             \
   product(bool, UseStlrForRelease, false,                               \
           "Use stlr instead of dmb ish + str for release stores")       \
+  product(bool, LogNUMANodes, false,                                    \
+          "Print NUMANodes")                                            \
+                                                                        \
+  product(ccstr, NUMANodes, NULL,                                       \
+          "This parameter provides the same functionality as"           \
+          "'numactl --all -N <nodes> -m <nodes>'."                      \
+          "<nodes> can be '0-2', '0,1,2', 'all' and so on.")            \
+                                                                        \
+  product(uintx, NUMANodesRandom, 0,                                    \
+          "Number of continuous nodes to bind to cpu"                   \
+          "with the first node randomly chosen."                        \
+          "If NUMANodes is set, NUMANodesRandom selects nodes randomly" \
+          "within this range.")                                         \
+  product(intx, NUMAMemNodesRandom, 0,                                  \
+          "Number of continuous nodes to bind to memory"                \
+          "with the first N nodes chosen by NUMANodesRandom.")          \
+  product(ccstr, NUMABindPolicy, NULL,                                  \
+          "Enable deterministic NUMA placement with combined Options,"  \
+          "including prefix=<id> and div=<N>.")                         \
 
 // end of ARCH_FLAGS
 
