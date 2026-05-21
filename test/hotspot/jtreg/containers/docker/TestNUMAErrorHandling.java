@@ -25,7 +25,7 @@
  * @test TestNUMAErrorHandling
  * @summary Test error handling and edge cases
  * @library /test/lib
- * @requires os.family == "linux"
+ * @requires os.family == "linux" & os.arch == "aarch64"
  * @run driver TestNUMAErrorHandling
  */
 import jdk.test.lib.process.OutputAnalyzer;

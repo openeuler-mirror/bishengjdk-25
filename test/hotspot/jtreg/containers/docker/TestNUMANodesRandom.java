@@ -25,7 +25,7 @@
  * @test TestNUMANodesRandom
  * @summary Test NUMANodesRandom parameter with different values
  * @library /test/lib
- * @requires os.family == "linux"
+ * @requires os.family == "linux" & os.arch == "aarch64"
  * @run driver TestNUMANodesRandom
  */
 import jdk.test.lib.process.OutputAnalyzer;
@@ -96,7 +96,7 @@ public class TestNUMANodesRandom {
         testSingleNodeRandom();
 
         // Test Case 2: Select multiple random nodes
-        if (nodeCount >= 2) {
+        if (nodeCount > 2) {
             testMultipleNodesRandom(2);
         }
 

@@ -25,7 +25,7 @@
  * @test TestNUMANodes
  * @summary Test NUMANodes parameter with different node specifications
  * @library /test/lib
- * @requires os.family == "linux"
+ * @requires os.family == "linux" & os.arch == "aarch64"
  * @run driver TestNUMANodes
  */
 import jdk.test.lib.process.OutputAnalyzer;

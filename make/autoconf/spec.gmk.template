@@ -339,6 +339,8 @@ SHIP_DEBUG_SYMBOLS := @SHIP_DEBUG_SYMBOLS@
 
 ENABLE_FULL_DOCS := @ENABLE_FULL_DOCS@
 
+ENABLE_KAE := @ENABLE_KAE@
+
 # JDK_OUTPUTDIR specifies where a working jvm is built.
 # You can run $(JDK_OUTPUTDIR)/bin/java
 

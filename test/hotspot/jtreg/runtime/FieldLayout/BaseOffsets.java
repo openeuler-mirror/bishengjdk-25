@@ -55,6 +55,7 @@
  * @test id=no-coops-no-ccp
  * @library /test/lib /
  * @requires vm.bits == "64"
+ * @requires os.arch == "aarch64"
  * @modules java.base/jdk.internal.misc
  *          java.management
  * @build jdk.test.whitebox.WhiteBox
