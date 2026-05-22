@@ -129,6 +129,12 @@
   #include <sched.h>
 #endif
 
+#if defined(AARCH64)
+  __asm__(".symver fcntl64,fcntl@GLIBC_2.17");
+#elif defined(AMD64)
+  __asm__(".symver fcntl64,fcntl@GLIBC_2.2.5");
+#endif
+
 // if RUSAGE_THREAD for getrusage() has not been defined, do it here. The code calling
 // getrusage() is prepared to handle the associated failure.
 #ifndef RUSAGE_THREAD
@@ -1494,6 +1500,11 @@ void os::Linux::capture_initial_stack(size_t max_size) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // time support
+
+#ifndef SUPPORTS_CLOCK_MONOTONIC
+#error "Build platform doesn't support clock_gettime and related functionality"
+#endif
+
 double os::elapsedVTime() {
   struct rusage usage;
   int retval = getrusage(RUSAGE_THREAD, &usage);
@@ -1503,6 +1514,39 @@ double os::elapsedVTime() {
     // better than nothing, but not much
     return elapsedTime();
   }
+}
+
+jlong os::javaTimeMillis() {
+  if (os::Posix::supports_clock_gettime()) {
+    struct timespec ts;
+    int status = os::Posix::clock_gettime(CLOCK_REALTIME, &ts);
+    assert_status(status == 0, status, "clock_gettime");
+    return jlong(ts.tv_sec) * MILLIUNITS +
+           jlong(ts.tv_nsec) / NANOUNITS_PER_MILLIUNIT;
+  }
+
+  struct timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert_status(status == 0, errno, "gettimeofday");
+  return jlong(time.tv_sec) * MILLIUNITS +
+         jlong(time.tv_usec) / (MICROUNITS / MILLIUNITS);
+}
+
+void os::javaTimeSystemUTC(jlong &seconds, jlong &nanos) {
+  if (os::Posix::supports_clock_gettime()) {
+    struct timespec ts;
+    int status = os::Posix::clock_gettime(CLOCK_REALTIME, &ts);
+    assert_status(status == 0, status, "clock_gettime");
+    seconds = jlong(ts.tv_sec);
+    nanos = jlong(ts.tv_nsec);
+    return;
+  }
+
+  struct timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert_status(status == 0, errno, "gettimeofday");
+  seconds = jlong(time.tv_sec);
+  nanos = jlong(time.tv_usec) * (NANOUNITS / MICROUNITS);
 }
 
 void os::Linux::fast_thread_clock_init() {
@@ -1522,10 +1566,41 @@ void os::Linux::fast_thread_clock_init() {
 
   if (pthread_getcpuclockid_func &&
       pthread_getcpuclockid_func(_main_thread, &clockid) == 0 &&
-      clock_getres(clockid, &tp) == 0 && tp.tv_sec == 0) {
+      os::Posix::clock_getres(clockid, &tp) == 0 && tp.tv_sec == 0) {
     _supports_fast_thread_cpu_time = true;
     _pthread_getcpuclockid = pthread_getcpuclockid_func;
   }
+}
+
+jlong os::javaTimeNanos() {
+  if (os::supports_monotonic_clock()) {
+    struct timespec tp;
+    int status = os::Posix::clock_gettime(CLOCK_MONOTONIC, &tp);
+    assert_status(status == 0, status, "clock_gettime");
+    return jlong(tp.tv_sec) * NANOSECS_PER_SEC + jlong(tp.tv_nsec);
+  }
+
+  struct timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert_status(status == 0, errno, "gettimeofday");
+  jlong usecs = jlong(time.tv_sec) * MICROUNITS + jlong(time.tv_usec);
+  return NANOUNITS / MICROUNITS * usecs;
+}
+
+void os::javaTimeNanos_info(jvmtiTimerInfo *info_ptr) {
+  info_ptr->max_value = all_bits_jlong;
+
+  if (os::supports_monotonic_clock()) {
+    // CLOCK_MONOTONIC measures elapsed time since an arbitrary point in the past.
+    info_ptr->may_skip_backward = false;
+    info_ptr->may_skip_forward = false;
+  } else {
+    // gettimeofday uses the time-of-day clock and can move in either direction.
+    info_ptr->may_skip_backward = true;
+    info_ptr->may_skip_forward = true;
+  }
+
+  info_ptr->kind = JVMTI_TIMER_ELAPSED;
 }
 
 // thread_id is kernel thread id (similar to Solaris LWP id)
@@ -4400,8 +4475,8 @@ OSReturn os::get_native_priority(const Thread* const thread,
 
 jlong os::Linux::fast_thread_cpu_time(clockid_t clockid) {
   struct timespec tp;
-  int status = clock_gettime(clockid, &tp);
-  assert(status == 0, "clock_gettime error: %s", os::strerror(errno));
+  int rc = os::Posix::clock_gettime(clockid, &tp);
+  assert(rc == 0, "clock_gettime is expected to return 0 code");
   return (tp.tv_sec * NANOSECS_PER_SEC) + tp.tv_nsec;
 }
 
@@ -4526,6 +4601,11 @@ void os::init(void) {
   FLAG_SET_DEFAULT(UseMadvPopulateWrite, (::madvise(nullptr, 0, MADV_POPULATE_WRITE) == 0));
 
   os::Posix::init();
+
+  if (!os::Posix::supports_monotonic_clock()) {
+    warning("No monotonic clock was available - timed services may "
+            "be adversely affected if the time-of-day clock changes");
+  }
 }
 
 // To install functions for atexit system call

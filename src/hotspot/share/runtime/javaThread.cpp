@@ -2139,7 +2139,7 @@ bool JavaThread::sleep_nanos(jlong nanos) {
     if (newtime - prevtime < 0) {
       // time moving backwards, should only happen if no monotonic clock
       // not a guarantee() because JVM should not abort on kernel/glibc bugs
-      assert(false,
+      assert(!os::supports_monotonic_clock(),
              "unexpected time moving backwards detected in JavaThread::sleep()");
     } else {
       nanos_remaining -= (newtime - prevtime);

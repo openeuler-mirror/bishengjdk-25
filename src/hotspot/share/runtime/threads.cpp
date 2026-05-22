@@ -61,6 +61,9 @@
 #include "oops/klass.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/symbol.hpp"
+#if defined(AARCH64) || defined(AMD64)
+#include "prims/upcallLinker.hpp"
+#endif // AARCH64 || AMD64
 #include "prims/jvm_misc.hpp"
 #include "prims/jvmtiAgentList.hpp"
 #include "prims/jvmtiEnvBase.hpp"
@@ -449,6 +452,11 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   // Initialize library-based TLS
   ThreadLocalStorage::init();
+
+#if defined(AARCH64) || defined(AMD64)
+  // Initialize ThreadLocalUpCall
+  ThreadLocalUpCall::init();
+#endif // AARCH64 || AMD64
 
   // Initialize the output stream module
   ostream_init();

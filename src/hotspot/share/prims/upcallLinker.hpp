@@ -47,4 +47,14 @@ public:
   static void handle_uncaught_exception(oop exception);
 };
 
+#if defined(AARCH64) || defined(AMD64)
+class ThreadLocalUpCall {
+public:
+  static void upcall_destructor(void* threadContext);
+  static void init();
+  static void set();
+  static void* get();
+};
+#endif // AARCH64 || AMD64
+
 #endif // SHARE_VM_PRIMS_UPCALLLINKER_HPP

@@ -451,7 +451,7 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
   #### OS DEFINES, these should be independent on toolchain
   if test "x$OPENJDK_TARGET_OS" = xlinux; then
     CFLAGS_OS_DEF_JVM="-DLINUX -D_FILE_OFFSET_BITS=64"
-    CFLAGS_OS_DEF_JDK="-D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64"
+    CFLAGS_OS_DEF_JDK="-D_GNU_SOURCE -D_REENTRANT -D_LARGEFILE64_SOURCE"
   elif test "x$OPENJDK_TARGET_OS" = xmacosx; then
     CFLAGS_OS_DEF_JVM="-D_ALLBSD_SOURCE -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE"
     CFLAGS_OS_DEF_JDK="-D_ALLBSD_SOURCE -D_DARWIN_UNLIMITED_SELECT"
@@ -782,6 +782,25 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_CPU_DEP],
         # non-release builds.
         $1_CFLAGS_CPU_JVM="-homeparams"
       fi
+    fi
+  fi
+
+  # Optional POSIX functionality needed by the JVM
+  #
+  # Check if clock_gettime is available and in which library. This indicates
+  # availability of CLOCK_MONOTONIC for hotspot. But we don't need to link, so
+  # don't let it update LIBS.
+  save_LIBS="$LIBS"
+  AC_SEARCH_LIBS(clock_gettime, rt, [HAS_CLOCK_GETTIME=true], [])
+  if test "x$LIBS" = "x-lrt "; then
+    CLOCK_GETTIME_IN_LIBRT=true
+  fi
+  LIBS="$save_LIBS"
+
+  if test "x$HAS_CLOCK_GETTIME" = "xtrue"; then
+    OS_CFLAGS_JVM="$OS_CFLAGS_JVM -DSUPPORTS_CLOCK_MONOTONIC"
+    if test "x$CLOCK_GETTIME_IN_LIBRT" = "xtrue"; then
+      OS_CFLAGS_JVM="$OS_CFLAGS_JVM -DNEEDS_LIBRT"
     fi
   fi
 

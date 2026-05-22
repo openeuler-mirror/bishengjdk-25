@@ -98,6 +98,12 @@
 /* Input/Output types for mincore(2) */
 typedef LINUX_ONLY(unsigned) char mincore_vec_t;
 
+#if defined(AMD64)
+  __asm__(".symver posix_spawn,posix_spawn@GLIBC_2.2.5");
+#elif defined(AARCH64)
+  __asm__(".symver posix_spawn,posix_spawn@GLIBC_2.17");
+#endif
+
 static jlong initial_time_count = 0;
 
 static int clock_tics_per_sec = 100;
@@ -950,6 +956,12 @@ ssize_t os::connect(int fd, struct sockaddr* him, socklen_t len) {
   RESTARTABLE_RETURN_SSIZE_T(::connect(fd, him, len));
 }
 
+#if !defined(AIX) && !defined(_ALLBSD_SOURCE)
+bool os::supports_monotonic_clock() {
+  return os::Posix::supports_monotonic_clock();
+}
+#endif
+
 void os::exit(int num) {
   permit_forbidden_function::exit(num);
 }
@@ -1291,6 +1303,15 @@ static void pthread_init_common(void) {
   PlatformMutex::init();
 }
 
+#ifdef SUPPORTS_CLOCK_MONOTONIC
+
+// This means we have clockid_t, clock_gettime et al and CLOCK_MONOTONIC
+
+int (*os::Posix::_clock_gettime)(clockid_t, struct timespec *) = NULL;
+int (*os::Posix::_clock_getres)(clockid_t, struct timespec *) = NULL;
+
+bool os::Posix::_supports_monotonic_clock = false;
+
 static int (*_pthread_condattr_setclock)(pthread_condattr_t *, clockid_t) = nullptr;
 
 static bool _use_clock_monotonic_condattr = false;
@@ -1306,7 +1327,39 @@ void os::Posix::init(void) {
   // NOTE: no logging available when this is called. Put logging
   // statements in init_2().
 
-  // Check for pthread_condattr_setclock support.
+  // 1. Check for CLOCK_MONOTONIC support.
+
+  void* handle = nullptr;
+
+#ifdef NEEDS_LIBRT
+  // We do dlopen's in this particular order due to bug in linux
+  // dynamic loader (see 6348968) leading to crash on exit.
+  handle = dlopen("librt.so.1", RTLD_LAZY);
+  if (handle == nullptr) {
+    handle = dlopen("librt.so", RTLD_LAZY);
+  }
+#endif
+
+  if (handle == nullptr) {
+    handle = RTLD_DEFAULT;
+  }
+
+  int (*clock_getres_func)(clockid_t, struct timespec*) =
+    (int(*)(clockid_t, struct timespec*))dlsym(handle, "clock_getres");
+  int (*clock_gettime_func)(clockid_t, struct timespec*) =
+    (int(*)(clockid_t, struct timespec*))dlsym(handle, "clock_gettime");
+  if (clock_getres_func != nullptr && clock_gettime_func != nullptr) {
+    _clock_gettime = clock_gettime_func;
+    _clock_getres = clock_getres_func;
+    struct timespec res;
+    struct timespec tp;
+    if (clock_getres_func(CLOCK_MONOTONIC, &res) == 0 &&
+        clock_gettime_func(CLOCK_MONOTONIC, &tp) == 0) {
+      _supports_monotonic_clock = true;
+    }
+  }
+
+  // 2. Check for pthread_condattr_setclock support.
 
   // libpthread is already loaded.
   int (*condattr_setclock_func)(pthread_condattr_t*, clockid_t) =
@@ -1321,7 +1374,7 @@ void os::Posix::init(void) {
   pthread_init_common();
 
   int status;
-  if (_pthread_condattr_setclock != nullptr) {
+  if (_pthread_condattr_setclock != nullptr && _clock_gettime != nullptr) {
     if ((status = _pthread_condattr_setclock(_condAttr, CLOCK_MONOTONIC)) != 0) {
       if (status == EINVAL) {
         _use_clock_monotonic_condattr = false;
@@ -1339,12 +1392,33 @@ void os::Posix::init(void) {
 }
 
 void os::Posix::init_2(void) {
-  log_info(os)("Use of CLOCK_MONOTONIC is supported");
+  log_info(os)("Use of CLOCK_MONOTONIC is%s supported",
+               (_clock_gettime != nullptr ? "" : " not"));
   log_info(os)("Use of pthread_condattr_setclock is%s supported",
                (_pthread_condattr_setclock != nullptr ? "" : " not"));
   log_info(os)("Relative timed-wait using pthread_cond_timedwait is associated with %s",
                _use_clock_monotonic_condattr ? "CLOCK_MONOTONIC" : "the default clock");
 }
+
+#else // !SUPPORTS_CLOCK_MONOTONIC
+
+void os::Posix::init(void) {
+#if defined(_ALLBSD_SOURCE)
+  clock_tics_per_sec = CLK_TCK;
+#else
+  clock_tics_per_sec = checked_cast<int>(sysconf(_SC_CLK_TCK));
+#endif
+  pthread_init_common();
+  initial_time_count = javaTimeNanos();
+}
+
+void os::Posix::init_2(void) {
+  log_info(os)("Use of CLOCK_MONOTONIC is not supported");
+  log_info(os)("Use of pthread_condattr_setclock is not supported");
+  log_info(os)("Relative timed-wait using pthread_cond_timedwait is associated with the default clock");
+}
+
+#endif // SUPPORTS_CLOCK_MONOTONIC
 
 int os::Posix::clock_tics_per_second() {
   return clock_tics_per_sec;
@@ -1444,21 +1518,33 @@ static void to_abstime(timespec* abstime, jlong timeout,
     timeout = 0;
   }
 
-  clockid_t clock = CLOCK_MONOTONIC;
-  if (isAbsolute || (!_use_clock_monotonic_condattr || isRealtime)) {
-    clock = CLOCK_REALTIME;
-  }
+#ifdef SUPPORTS_CLOCK_MONOTONIC
+  if (!isAbsolute && os::Posix::supports_monotonic_clock()) {
+    clockid_t clock = CLOCK_MONOTONIC;
+    if (!_use_clock_monotonic_condattr || isRealtime) {
+      clock = CLOCK_REALTIME;
+    }
 
-  struct timespec now;
-  int status = clock_gettime(clock, &now);
-  assert(status == 0, "clock_gettime error: %s", os::strerror(errno));
-
-  if (!isAbsolute) {
+    struct timespec now;
+    int status = os::Posix::clock_gettime(clock, &now);
+    assert_status(status == 0, status, "clock_gettime");
     calc_rel_time(abstime, timeout, now.tv_sec, now.tv_nsec, NANOUNITS);
+    DEBUG_ONLY(max_secs += now.tv_sec;)
   } else {
-    unpack_abs_time(abstime, timeout, now.tv_sec);
+#endif
+    // Time-of-day clock is all we can reliably use here.
+    struct timeval now;
+    int status = gettimeofday(&now, nullptr);
+    assert_status(status == 0, errno, "gettimeofday");
+    if (isAbsolute) {
+      unpack_abs_time(abstime, timeout, now.tv_sec);
+    } else {
+      calc_rel_time(abstime, timeout, now.tv_sec, now.tv_usec, MICROUNITS);
+    }
+    DEBUG_ONLY(max_secs += now.tv_sec;)
+#ifdef SUPPORTS_CLOCK_MONOTONIC
   }
-  DEBUG_ONLY(max_secs += now.tv_sec;)
+#endif
 
   assert(abstime->tv_sec >= 0, "tv_sec < 0");
   assert(abstime->tv_sec <= max_secs, "tv_sec > max_secs");
@@ -1476,6 +1562,7 @@ void os::Posix::to_RTC_abstime(timespec* abstime, int64_t millis) {
 
 // Common (partly) shared time functions
 
+#if !defined(LINUX) && !defined(AIX) && !defined(_ALLBSD_SOURCE)
 jlong os::javaTimeMillis() {
   struct timespec ts;
   int status = clock_gettime(CLOCK_REALTIME, &ts);
@@ -1491,12 +1578,13 @@ void os::javaTimeSystemUTC(jlong &seconds, jlong &nanos) {
   seconds = jlong(ts.tv_sec);
   nanos = jlong(ts.tv_nsec);
 }
+#endif // !LINUX && !AIX && !_ALLBSD_SOURCE
 
-// macOS and AIX have platform specific implementations for javaTimeNanos()
+// AIX and BSD have platform specific implementations for javaTimeNanos()
 // using native clock/timer access APIs. These have historically worked well
 // for those platforms, but it may be possible for them to switch to the
 // generic clock_gettime mechanism in the future.
-#if !defined(__APPLE__) && !defined(AIX)
+#if !defined(AIX) && !defined(LINUX) && !defined(_ALLBSD_SOURCE)
 
 jlong os::javaTimeNanos() {
   struct timespec tp;
@@ -1513,7 +1601,7 @@ void os::javaTimeNanos_info(jvmtiTimerInfo *info_ptr) {
   info_ptr->may_skip_forward = false;       // not subject to resetting or drifting
   info_ptr->kind = JVMTI_TIMER_ELAPSED;     // elapsed not CPU time
 }
-#endif // ! APPLE && !AIX
+#endif // !AIX && !LINUX && !_ALLBSD_SOURCE
 
 // Time since start-up in seconds to a fine granularity.
 double os::elapsedTime() {

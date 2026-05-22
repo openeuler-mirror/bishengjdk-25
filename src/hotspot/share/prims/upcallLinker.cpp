@@ -25,6 +25,9 @@
 #include "classfile/symbolTable.hpp"
 #include "classfile/systemDictionary.hpp"
 #include "compiler/compilationPolicy.hpp"
+#if defined(AARCH64) || defined(AMD64)
+#include "memory/allocation.hpp"
+#endif // AARCH64 || AMD64
 #include "memory/resourceArea.hpp"
 #include "prims/upcallLinker.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
@@ -44,8 +47,14 @@ extern struct JavaVM_ main_vm;
 // to keep track of the fact that we have attached a native thread to the VM. When the thread local
 // storage is destroyed (which happens when the native threads is terminated), we check if the
 // storage has an attached thread and, if so, we detach it from the VM.
+#if defined(AARCH64) || defined(AMD64)
+struct UpcallContext: public CHeapObj<mtInternal> {
+#else
 struct UpcallContext {
+#endif // AARCH64 || AMD64
   Thread* attachedThread;
+
+  UpcallContext() {}
 
   ~UpcallContext() {
     if (attachedThread != nullptr) {
@@ -55,9 +64,36 @@ struct UpcallContext {
   }
 };
 
+#if defined(AARCH64) || defined(AMD64)
+static unsigned int upcall_thread_key;
+
+void ThreadLocalUpCall::upcall_destructor(void* threadContext) {
+  delete static_cast<UpcallContext *>(threadContext);
+}
+
+void ThreadLocalUpCall::init() {
+  int rslt = pthread_key_create(&upcall_thread_key, upcall_destructor);
+  assert_status(rslt == 0, rslt, "pthread_key_create");
+}
+
+void* ThreadLocalUpCall::get() {
+  return pthread_getspecific(upcall_thread_key);
+}
+
+void ThreadLocalUpCall::set() {
+  if (!ThreadLocalUpCall::get()) {
+    UpcallContext* threadContext = new UpcallContext();
+    pthread_setspecific(upcall_thread_key, threadContext);
+  }
+}
+#else
 APPROVED_CPP_THREAD_LOCAL UpcallContext threadContext;
+#endif // AARCH64 || AMD64
 
 JavaThread* UpcallLinker::maybe_attach_and_get_thread() {
+#if defined(AARCH64) || defined(AMD64)
+  ThreadLocalUpCall::set();
+#endif // AARCH64 || AMD64
   JavaThread* thread = JavaThread::current_or_null();
   if (thread == nullptr) {
     JavaVM_ *vm = (JavaVM *)(&main_vm);
@@ -65,7 +101,11 @@ JavaThread* UpcallLinker::maybe_attach_and_get_thread() {
     jint result = vm->functions->AttachCurrentThreadAsDaemon(vm, (void**) &p_env, nullptr);
     guarantee(result == JNI_OK, "Could not attach thread for upcall. JNI error code: %d", result);
     thread = JavaThread::current();
+#if defined(AARCH64) || defined(AMD64)
+    ((UpcallContext *)(ThreadLocalUpCall::get()))->attachedThread = thread;
+#else
     threadContext.attachedThread = thread;
+#endif // AARCH64 || AMD64
     assert(!thread->has_last_Java_frame(), "newly-attached thread not expected to have last Java frame");
   }
   return thread;
