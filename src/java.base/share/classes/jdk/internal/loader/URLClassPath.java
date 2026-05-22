@@ -394,7 +394,7 @@ public class URLClassPath {
             }
         }
         Loader loader = lmap.get(urlNoFragString);
-        return loader != null ? loader.getBaseURL() : null;
+        return loader != null ? loader.getCodeSourceURL() : null;
     }
 
     /*
@@ -525,6 +525,10 @@ public class URLClassPath {
             return base;
         }
 
+        URL getCodeSourceURL() {
+            return base;
+        }
+
         URL findResource(final String name) {
             URL url;
             try {
@@ -638,6 +642,11 @@ public class URLClassPath {
             super(newURL("jar", "", -1, url + "!/", jarHandler));
             csu = url;
             ensureOpen();
+        }
+
+        @Override
+        URL getCodeSourceURL() {
+            return csu;
         }
 
         @SuppressWarnings("deprecation")
