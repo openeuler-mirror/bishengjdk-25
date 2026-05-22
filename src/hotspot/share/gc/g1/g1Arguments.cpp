@@ -55,7 +55,17 @@ void G1Arguments::initialize_alignments() {
   // There is a circular dependency here. We base the region size on the heap
   // size, but the heap size should be aligned with the region size. To get
   // around this we use the unaligned values for the heap.
-  G1HeapRegion::setup_heap_region_size(MaxHeapSize);
+  if (Universe::is_dynamic_max_heap_enable()) {
+#ifdef AARCH64
+    if (!FLAG_IS_CMDLINE(DynamicMaxHeapSizeLimit) && !FLAG_IS_CMDLINE(ElasticMaxHeapSize)) {
+      guarantee(ElasticMaxHeap, "must be");
+      FLAG_SET_ERGO(DynamicMaxHeapSizeLimit, MaxHeapSize);
+    }
+    G1HeapRegion::setup_heap_region_size(DynamicMaxHeapSizeLimit);
+#endif // AARCH64
+  } else {
+    G1HeapRegion::setup_heap_region_size(MaxHeapSize);
+  }
 
   SpaceAlignment = G1HeapRegion::GrainBytes;
   HeapAlignment = calculate_heap_alignment(SpaceAlignment);
@@ -255,5 +265,10 @@ CollectedHeap* G1Arguments::create_heap() {
 }
 
 size_t G1Arguments::heap_reserved_size_bytes() {
+#ifdef AARCH64
+  if (Universe::is_dynamic_max_heap_enable()) {
+    return DynamicMaxHeapSizeLimit;
+  }
+#endif
   return MaxHeapSize;
 }

@@ -109,8 +109,6 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   HeapWord* expand_heap_and_allocate(size_t size, bool is_tlab);
 
-  void do_full_collection(bool clear_all_soft_refs) override;
-
 public:
   ParallelScavengeHeap() :
     CollectedHeap(),
@@ -193,6 +191,8 @@ public:
 
   void collect_at_safepoint(bool full);
 
+  void do_full_collection(bool clear_all_soft_refs) override;
+
   void ensure_parsability(bool retire_tlabs) override;
   void resize_all_tlabs() override;
 
@@ -246,6 +246,9 @@ public:
 
   void pin_object(JavaThread* thread, oop obj) override;
   void unpin_object(JavaThread* thread, oop obj) override;
+
+  // Dynamic Max Heap
+  virtual bool change_max_heap(size_t new_size);
 };
 
 // Class that can be used to print information about the

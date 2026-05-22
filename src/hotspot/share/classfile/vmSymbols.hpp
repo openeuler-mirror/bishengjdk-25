@@ -738,6 +738,11 @@ class SerializeClosure;
   template(toFileURL_name,                                  "toFileURL")                                          \
   template(toFileURL_signature,                             "(Ljava/lang/String;)Ljava/net/URL;")                 \
                                                                                                                   \
+  /* ElasticMaxDirectMemory */                                                                                    \
+  template(java_nio_Bits,                          "java/nio/Bits")                                               \
+  template(updateMaxMemory_name,                   "updateMaxMemory")                                             \
+  template(updateMaxMemory_signature,              "(J)Ljava/lang/String;")                                       \
+                                                                                                                  \
   /* jcmd Thread.dump_to_file */                                                                                  \
   template(jdk_internal_vm_ThreadDumper,           "jdk/internal/vm/ThreadDumper")                                \
   template(dumpThreads_name,                       "dumpThreads")                                                 \

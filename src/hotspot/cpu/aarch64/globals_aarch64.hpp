@@ -124,6 +124,18 @@ define_pd_global(intx, InlineSmallCode,          1000);
           range(1, 99)                                                  \
   product(ccstr, UseBranchProtection, "none",                           \
           "Branch Protection to use: none, standard, pac-ret")          \
+  product(size_t, DynamicMaxHeapSizeLimit, ScaleForWordSize(96*M),      \
+          "The limit of Dynamic maximum heap size (in bytes)")          \
+  product(uintx, DynamicMaxHeapShrinkMinFreeRatio, 40,                  \
+          "Minimal ratio of free bytes after dynamic max heap shirnk")  \
+  product(size_t, ElasticMaxHeapSize, ScaleForWordSize(96*M),           \
+          "Elastic maximum heap size (in bytes)")                       \
+  product(bool, ElasticMaxHeap, false,                                  \
+          "Allow change max heap size during runtime with jcmd")        \
+  product(bool, TraceElasticMaxHeap, false,                             \
+          "Trace Elastic Max Heap adjustion logs and failure reasons")  \
+  product(uintx, ElasticMaxHeapShrinkMinFreeRatio, 40,                  \
+          "minimal ratio of free bytes after elastic max heap shirnk")  \
   product(bool, AlwaysMergeDMB, true, DIAGNOSTIC,                       \
           "Always merge DMB instructions in code emission")             \
   product(bool, UseStlrForRelease, false,                               \

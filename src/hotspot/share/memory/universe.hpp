@@ -30,6 +30,7 @@
 #include "oops/array.hpp"
 #include "oops/oopHandle.hpp"
 #include "runtime/handles.hpp"
+#include "runtime/globals_extension.hpp"
 #include "utilities/growableArray.hpp"
 
 // Universe is a name space holding known system classes and objects in the VM.
@@ -157,6 +158,9 @@ class Universe: AllStatic {
   // Debugging
   static int _verify_count;                           // number of verifies done
   static long verify_flags;
+
+  // Dynamic Max Heap
+  static bool _enable_dynamic_max_heap;
 
   static uintptr_t _verify_oop_mask;
   static uintptr_t _verify_oop_bits;
@@ -370,6 +374,46 @@ class Universe: AllStatic {
 
   // Compiler support
   static int base_vtable_size()               { return _base_vtable_size; }
+
+  // Dynamic Max Heap
+  static const char* dynamic_max_heap_dcmd_name() {
+#ifdef AARCH64
+    if (FLAG_IS_CMDLINE(ElasticMaxHeapSize)) {
+      return "GC.elastic_max_heap";
+    }
+    if (FLAG_IS_CMDLINE(DynamicMaxHeapSizeLimit)) {
+      return "GC.change_max_heap";
+    }
+#endif
+    return "GC.elastic_max_heap";
+  }
+  static const char* dynamic_max_heap_option_name() {
+#ifdef AARCH64
+    if (FLAG_IS_CMDLINE(ElasticMaxHeapSize)) {
+      return "ElasticMaxHeap";
+    }
+    if (FLAG_IS_CMDLINE(DynamicMaxHeapSizeLimit)) {
+      return "DynamicMaxHeap";
+    }
+#endif
+    return "ElasticMaxHeap";
+  }
+  static const char* dynamic_max_heap_size_limit_option_name() {
+#ifdef AARCH64
+    if (FLAG_IS_CMDLINE(ElasticMaxHeapSize)) {
+      return "ElasticMaxHeapSize";
+    }
+    if (FLAG_IS_CMDLINE(DynamicMaxHeapSizeLimit)) {
+      return "DynamicMaxHeapSizeLimit";
+    }
+#endif
+    return "+ElasticMaxHeap";
+  }
+  static bool is_dynamic_max_heap_enable() {
+    NOT_AARCH64(return false;);
+    AARCH64_ONLY(return _enable_dynamic_max_heap;);
+  }
+  static void set_dynamic_max_heap_enable(bool a)         { _enable_dynamic_max_heap = a; }
 };
 
 #endif // SHARE_MEMORY_UNIVERSE_HPP

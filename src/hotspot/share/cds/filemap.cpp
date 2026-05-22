@@ -1629,8 +1629,10 @@ bool FileMapInfo::map_heap_region() {
     address heap_end = (address)heap_range.end();
     address mapped_heap_region_end = (address)_mapped_heap_memregion.end();
     assert(heap_end >= mapped_heap_region_end, "must be");
-    assert(heap_end - mapped_heap_region_end < (intx)(G1HeapRegion::GrainBytes),
+    if (!Universe::is_dynamic_max_heap_enable()) {
+      assert(heap_end - mapped_heap_region_end < (intx)(G1HeapRegion::GrainBytes),
            "must be at the top of the heap to avoid fragmentation");
+    }
 #endif
 
     ArchiveHeapLoader::set_mapped();

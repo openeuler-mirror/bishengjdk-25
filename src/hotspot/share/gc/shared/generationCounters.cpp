@@ -26,6 +26,7 @@
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/virtualspace.hpp"
+#include "memory/universe.hpp"
 #include "runtime/perfData.hpp"
 
 GenerationCounters::GenerationCounters(const char* name,
@@ -53,8 +54,15 @@ GenerationCounters::GenerationCounters(const char* name,
                                      min_capacity, CHECK);
 
     cname = PerfDataManager::counter_name(_name_space, "maxCapacity");
-    PerfDataManager::create_constant(SUN_GC, cname, PerfData::U_Bytes,
-                                     max_capacity, CHECK);
+    // Dynamic Max Heap
+    if (Universe::is_dynamic_max_heap_enable()) {
+      _max_size = PerfDataManager::create_variable(SUN_GC, cname, PerfData::U_Bytes,
+                                                   max_capacity, CHECK);
+    } else {
+      _max_size = NULL;
+      PerfDataManager::create_constant(SUN_GC, cname, PerfData::U_Bytes,
+                                       max_capacity, CHECK);
+    }
 
     cname = PerfDataManager::counter_name(_name_space, "capacity");
     _current_size =
@@ -71,3 +79,7 @@ void GenerationCounters::update_all(size_t curr_capacity) {
   _current_size->set_value(curr_capacity);
 }
 
+void GenerationCounters::update_max_size(size_t size) {
+  guarantee(Universe::is_dynamic_max_heap_enable(), "must be");
+  _max_size->set_value(size);
+}

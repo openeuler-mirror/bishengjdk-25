@@ -41,7 +41,8 @@ PSYoungGen::PSYoungGen(ReservedSpace rs, size_t initial_size, size_t min_size, s
   _from_space(nullptr),
   _to_space(nullptr),
   _min_gen_size(min_size),
-  _max_gen_size(max_size),
+  _max_gen_size(Universe::is_dynamic_max_heap_enable() ? rs.size() : max_size),
+  _cur_max_gen_size(Universe::is_dynamic_max_heap_enable() ? max_size : -1),
   _gen_counters(nullptr),
   _eden_counters(nullptr),
   _from_counters(nullptr),
@@ -55,6 +56,9 @@ void PSYoungGen::initialize_virtual_space(ReservedSpace rs,
                                           size_t alignment) {
   assert(initial_size != 0, "Should have a finite size");
   _virtual_space = new PSVirtualSpace(rs, alignment);
+  if (Universe::is_dynamic_max_heap_enable()) {
+    _virtual_space->set_dynamic_max_heap_size(_cur_max_gen_size);
+  }
   if (!virtual_space()->expand_by(initial_size)) {
     vm_exit_during_initialization("Could not reserve enough space for object heap");
   }
@@ -69,7 +73,7 @@ void PSYoungGen::initialize_work() {
 
   _reserved = MemRegion((HeapWord*)virtual_space()->low_boundary(),
                         (HeapWord*)virtual_space()->high_boundary());
-  assert(_reserved.byte_size() == max_gen_size(), "invariant");
+  assert(_reserved.byte_size() == max_gen_size() || Universe::is_dynamic_max_heap_enable(), "invariant");
 
   MemRegion cmr((HeapWord*)virtual_space()->low(),
                 (HeapWord*)virtual_space()->high());

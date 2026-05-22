@@ -2281,6 +2281,10 @@ bool os::uncommit_memory(char* addr, size_t bytes, bool executable) {
   return res;
 }
 
+bool os::free_heap_physical_memory(char *addr, size_t bytes) {
+  return pd_free_heap_physical_memory(addr, bytes);
+}
+
 // The scope of NmtVirtualMemoryLocker covers both pd_release_memory and record_virtual_memory_release because
 // these operations must happen atomically to avoid races causing NMT to fall out os sync with the OS reality.
 // We do not have the same lock protection for pd_reserve_memory and record_virtual_memory_reserve.

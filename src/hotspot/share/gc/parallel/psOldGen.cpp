@@ -39,7 +39,8 @@
 PSOldGen::PSOldGen(ReservedSpace rs, size_t initial_size, size_t min_size,
                    size_t max_size):
   _min_gen_size(min_size),
-  _max_gen_size(max_size)
+  _max_gen_size(Universe::is_dynamic_max_heap_enable() ? rs.size() : max_size),
+  _cur_max_gen_size(Universe::is_dynamic_max_heap_enable() ? max_size : -1)
 {
   initialize(rs, initial_size, GenAlignment);
 }
@@ -56,6 +57,9 @@ void PSOldGen::initialize_virtual_space(ReservedSpace rs,
                                         size_t alignment) {
 
   _virtual_space = new PSVirtualSpace(rs, alignment);
+  if (Universe::is_dynamic_max_heap_enable()) {
+    _virtual_space->set_dynamic_max_heap_size(_cur_max_gen_size);
+  }
   if (!_virtual_space->expand_by(initial_size)) {
     vm_exit_during_initialization("Could not reserve enough space for "
                                   "object heap");
@@ -64,7 +68,7 @@ void PSOldGen::initialize_virtual_space(ReservedSpace rs,
 
 void PSOldGen::initialize_work() {
   MemRegion const reserved_mr = reserved();
-  assert(reserved_mr.byte_size() == max_gen_size(), "invariant");
+  assert(reserved_mr.byte_size() == max_gen_size() || Universe::is_dynamic_max_heap_enable(), "invariant");
 
   // Card table stuff: for all committed memory
   MemRegion committed_mr((HeapWord*)virtual_space()->low(),

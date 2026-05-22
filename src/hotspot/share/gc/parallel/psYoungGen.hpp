@@ -49,6 +49,9 @@ class PSYoungGen : public CHeapObj<mtGC> {
   const size_t _min_gen_size;
   const size_t _max_gen_size;
 
+  // For Dynamic Max Heap
+  size_t _cur_max_gen_size;
+
   // Performance counters
   GenerationCounters*   _gen_counters;
   SpaceCounters*        _eden_counters;
@@ -112,6 +115,9 @@ class PSYoungGen : public CHeapObj<mtGC> {
   //        not allow us to use these values.
   void resize(size_t eden_size, size_t survivor_size);
 
+  // Resize for DynamicHeapSize, shrink to new_size
+  bool shrink_after_full_gc(size_t new_size);
+
   // Size info
   size_t capacity_in_bytes() const;
   size_t used_in_bytes() const;
@@ -122,7 +128,24 @@ class PSYoungGen : public CHeapObj<mtGC> {
   size_t free_in_words() const;
 
   size_t min_gen_size() const { return _min_gen_size; }
-  size_t max_gen_size() const { return _max_gen_size; }
+  size_t max_gen_size() const { 
+    if (Universe::is_dynamic_max_heap_enable()) {
+      guarantee(_cur_max_gen_size <= _max_gen_size && _cur_max_gen_size >= _min_gen_size, "must be");
+      return _cur_max_gen_size;
+    }
+    return _max_gen_size; 
+  }
+
+  void set_cur_max_gen_size(size_t new_size) {
+    guarantee(Universe::is_dynamic_max_heap_enable(), "must be");
+    guarantee(new_size <= _max_gen_size && new_size >= _min_gen_size, "must be");
+    guarantee(_max_gen_size == _reserved.byte_size(), "must be");
+    _cur_max_gen_size = new_size;
+    _virtual_space->set_dynamic_max_heap_size(new_size);
+    if (UsePerfData) {
+      _gen_counters->update_max_size(new_size);
+    }
+  }
 
   // Allocation
   HeapWord* allocate(size_t word_size) {

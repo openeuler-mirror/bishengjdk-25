@@ -28,6 +28,7 @@
 #include "gc/parallel/parallelScavengeHeap.hpp"
 #include "gc/shared/gcCause.hpp"
 #include "gc/shared/gcVMOperations.hpp"
+#include "gc/shared/dynamicMaxHeap.hpp"
 
 class VM_ParallelCollectForAllocation : public VM_CollectForAllocation {
   bool _is_tlab;
@@ -44,6 +45,13 @@ class VM_ParallelGCCollect: public VM_GC_Operation {
  public:
   VM_ParallelGCCollect(uint gc_count, uint full_gc_count, GCCause::Cause gc_cause);
   virtual VMOp_Type type() const { return VMOp_ParallelGCCollect; }
+  virtual void doit();
+};
+
+// For ParallelScavengeHeap
+class PS_ChangeMaxHeapOp : public VM_ChangeMaxHeapOp {
+public:
+  PS_ChangeMaxHeapOp(size_t new_max_heap);
   virtual void doit();
 };
 

@@ -94,7 +94,11 @@ void G1Policy::init(G1CollectedHeap* g1h, G1CollectionSet* collection_set) {
 
   assert(Heap_lock->owned_by_self(), "Locking discipline.");
 
-  _young_gen_sizer.adjust_max_new_size(_g1h->max_num_regions());
+  if (Universe::is_dynamic_max_heap_enable()) {
+    _young_gen_sizer.adjust_max_new_size((uint)(_g1h->current_max_heap_size() / G1HeapRegion::GrainBytes));
+  } else {
+    _young_gen_sizer.adjust_max_new_size(_g1h->max_num_regions());
+  }
 
   _free_regions_at_end_of_collection = _g1h->num_free_regions();
 

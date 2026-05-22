@@ -28,7 +28,8 @@
 #include "utilities/align.hpp"
 
 PSVirtualSpace::PSVirtualSpace(ReservedSpace rs, size_t alignment) :
-  _alignment(alignment)
+  _alignment(alignment),
+  _dynamic_max_heap_size(0)
 {
   set_reserved(rs);
   set_committed(reserved_low_addr(), reserved_low_addr());

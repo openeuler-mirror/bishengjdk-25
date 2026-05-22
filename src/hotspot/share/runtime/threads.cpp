@@ -901,6 +901,15 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
     ClassLoader::print_counters(&log);
   }
 
+  // Dynamic Max Heap: reset heap initial size to MaxHeapSize
+  if (Universe::is_dynamic_max_heap_enable()) {
+    bool success = Universe::heap()->change_max_heap(MaxHeapSize);
+    if (!success) {
+      log_error(dynamic, heap)("VM failed to initialize heap to Xmx " SIZE_FORMAT "K", (MaxHeapSize / K));
+      vm_exit(1);
+    }
+  }
+
   return JNI_OK;
 }
 

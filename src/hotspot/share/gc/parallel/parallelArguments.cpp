@@ -133,6 +133,11 @@ void ParallelArguments::initialize_heap_flags_and_sizes() {
 }
 
 size_t ParallelArguments::heap_reserved_size_bytes() {
+#ifdef AARCH64
+  if (Universe::is_dynamic_max_heap_enable()) {
+    return DynamicMaxHeapSizeLimit;
+  }
+#endif
   return MaxHeapSize;
 }
 

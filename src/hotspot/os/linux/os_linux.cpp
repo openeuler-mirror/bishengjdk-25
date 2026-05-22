@@ -3557,6 +3557,10 @@ bool os::pd_uncommit_memory(char* addr, size_t size, bool exec) {
   return true;
 }
 
+bool os::pd_free_heap_physical_memory(char *addr, size_t bytes) {
+  return madvise(addr, bytes, MADV_DONTNEED) == 0;
+}
+
 static address get_stack_commited_bottom(address bottom, size_t size) {
   address nbot = bottom;
   address ntop = bottom + size;
