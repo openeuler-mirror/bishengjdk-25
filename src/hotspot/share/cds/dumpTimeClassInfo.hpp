@@ -33,10 +33,12 @@
 #include "memory/metaspaceClosure.hpp"
 #include "oops/instanceKlass.hpp"
 #include "prims/jvmtiExport.hpp"
+#include "utilities/macros.hpp"
 #include "utilities/growableArray.hpp"
 
 class Method;
 class Symbol;
+class ClassFileStream;
 
 class DumpTimeClassInfo: public CHeapObj<mtClass> {
   bool _excluded;
@@ -119,6 +121,17 @@ class DumpTimeClassInfo: public CHeapObj<mtClass> {
     Symbol* from_name() { return _from_name; }
   };
 
+#if INCLUDE_AGGRESSIVE_CDS
+  struct DTSharedData {
+    int _length;
+    u1  _data[1];
+
+    static size_t byte_size(int length) {
+      return align_up(offset_of(DTSharedData, _data) + length, wordSize);
+    }
+  };
+#endif
+
 public:
   InstanceKlass*               _klass;
   InstanceKlass*               _nest_host;
@@ -131,6 +144,11 @@ public:
   GrowableArray<char>*                 _verifier_constraint_flags;
   GrowableArray<DTLoaderConstraint>*   _loader_constraints;
   GrowableArray<int>*                  _enum_klass_static_fields;
+#if INCLUDE_AGGRESSIVE_CDS
+  DTSharedData*                        _shared_class_file;
+  DTSharedData*                        _url_string;
+  int64_t                              _classfile_timestamp;
+#endif
 
   DumpTimeClassInfo() {
     _klass = nullptr;
@@ -148,6 +166,11 @@ public:
     _verifier_constraint_flags = nullptr;
     _loader_constraints = nullptr;
     _enum_klass_static_fields = nullptr;
+#if INCLUDE_AGGRESSIVE_CDS
+    _shared_class_file = nullptr;
+    _url_string = nullptr;
+    _classfile_timestamp = 0;
+#endif
   }
   DumpTimeClassInfo& operator=(const DumpTimeClassInfo&) = delete;
   ~DumpTimeClassInfo();
@@ -158,6 +181,14 @@ public:
   void add_enum_klass_static_field(int archived_heap_root_index);
   int  enum_klass_static_field(int which_field);
   bool is_builtin();
+#if INCLUDE_AGGRESSIVE_CDS
+  void copy_shared_class_file(ClassFileStream* cfs);
+  void free_shared_class_file();
+  int shared_class_file_size() const;
+  void copy_url_string(const char* source);
+  void free_url_string();
+  int url_string_size() const;
+#endif
 
 private:
   template <typename T>
@@ -223,6 +254,12 @@ public:
   void set_failed_verification()                    { _failed_verification = true; }
   InstanceKlass* nest_host() const                  { return _nest_host; }
   void set_nest_host(InstanceKlass* nest_host)      { _nest_host = nest_host; }
+#if INCLUDE_AGGRESSIVE_CDS
+  DTSharedData* shared_class_file() const           { return _shared_class_file; }
+  DTSharedData* url_string() const                  { return _url_string; }
+  int64_t classfile_timestamp() const               { return _classfile_timestamp; }
+  void set_classfile_timestamp(int64_t timestamp)   { _classfile_timestamp = timestamp; }
+#endif
 
   size_t runtime_info_bytesize() const;
 };

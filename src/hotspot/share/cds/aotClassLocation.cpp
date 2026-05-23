@@ -392,7 +392,7 @@ const char* AOTClassLocation::file_type_string() const {
 bool AOTClassLocation::check(const char* runtime_path, bool has_aot_linked_classes) const {
   struct stat st;
   if (os::stat(runtime_path, &st) != 0) {
-    if (_file_type != FileType::NOT_EXIST) {
+    if (_file_type != FileType::NOT_EXIST && !SkipSharedClassPathCheck) {
       aot_log_warning(aot)("Required classpath entry does not exist: %s", runtime_path);
       return false;
     }
@@ -405,7 +405,7 @@ bool AOTClassLocation::check(const char* runtime_path, bool has_aot_linked_class
       aot_log_warning(aot)("'%s' must be a file", runtime_path);
       return false;
     }
-    if (!os::dir_is_empty(runtime_path)) {
+    if (!os::dir_is_empty(runtime_path) && !SkipSharedClassPathCheck) {
       aot_log_warning(aot)("directory is not empty: '%s'", runtime_path);
       return false;
     }
@@ -685,6 +685,10 @@ int AOTClassLocationConfig::get_module_shared_path_index(Symbol* location) const
 void AOTClassLocationConfig::check_nonempty_dirs() const {
   assert(CDSConfig::is_dumping_archive(), "sanity");
 
+  if (SkipSharedClassPathCheck) {
+    return;
+  }
+
   bool has_nonempty_dir = false;
   dumptime_iterate([&](AOTClassLocation* cs) {
     if (cs->index() > _max_used_index) {
@@ -788,7 +792,7 @@ bool AOTClassLocationConfig::check_classpaths(bool is_boot_classpath, bool has_a
       while (!file_exists(runtime_path) && runtime_css.has_next()) {
         runtime_path = runtime_css.get_next();
       }
-      if (!os::same_files(effective_dumptime_path, runtime_path)) {
+      if (!os::same_files(effective_dumptime_path, runtime_path) && !SkipSharedClassPathCheck) {
         aot_log_warning(aot)("The name of %s classpath [%d] does not match: expected '%s', got '%s'",
                          which, runtime_css.current(), effective_dumptime_path, runtime_path);
         return false;
@@ -1021,7 +1025,7 @@ bool AOTClassLocationConfig::validate(const char* cache_filename, bool has_aot_l
     }
   }
 
-  if (success) {
+  if (success || SkipSharedClassPathCheck) {
     _runtime_instance = this;
   } else {
     const char* mismatch_msg = "shared class paths mismatch";

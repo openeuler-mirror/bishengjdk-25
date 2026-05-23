@@ -25,6 +25,7 @@
 #ifndef SHARE_CDS_CDS_GLOBALS_HPP
 #define SHARE_CDS_CDS_GLOBALS_HPP
 
+#include "utilities/macros.hpp"
 #include "runtime/globals_shared.hpp"
 
 //
@@ -88,6 +89,14 @@
                                                                             \
   product(ccstr, ArchiveClassesAtExit, nullptr,                             \
           "The path and name of the dynamic archive file")                  \
+                                                                            \
+  AGGRESSIVE_CDS_ONLY(product(bool, UseAggressiveCDS, false, EXPERIMENTAL,  \
+          "Load eligible classes from CDS aggressively for URLClassLoader " \
+          "without re-parsing class bytes"))                                \
+                                                                            \
+  AGGRESSIVE_CDS_ONLY(product(bool, CheckClassFileTimeStamp, true, EXPERIMENTAL, \
+          "Check whether a dumped class file has changed before "           \
+          "Aggressive CDS reuses it"))                                      \
                                                                             \
   product(ccstr, ExtraSharedClassListFile, nullptr,                         \
           "Extra classlist for building the CDS archive file")              \
@@ -169,6 +178,18 @@
                                                                             \
   develop(bool, TestAOTAdapterLinkFailure, false,                           \
           "Test failure of adapter linking when loading from AOT cache.")   \
+                                                                            \
+  product(ccstr, AutoSharedArchivePath, NULL,                               \
+          "Auto enable the AppCDS feature"                                  \
+          "the path save classlist and jsa file")                           \
+                                                                            \
+  product(bool, PrintAutoAppCDS, false,                                     \
+          "Print path and some information about AutoSharedArchivePath")    \
+                                                                            \
+  product(bool, SkipSharedClassPathCheck, false, DIAGNOSTIC,                \
+          "Skips SharedClassPath check in CDS, which allows"                \
+          "non-empty directories to exist in classpath when CDS"            \
+          "is used")                                                        \
 
 // end of CDS_FLAGS
 

@@ -187,7 +187,7 @@ public class Deflater implements AutoCloseable {
      * @param windowBits compression format (-15~31)
      */
     @SuppressWarnings("this-escape")
-    public Deflater(int level, int windowBits) {
+    Deflater(int level, int windowBits) {
         this.level = level;
         this.strategy = DEFAULT_STRATEGY;
         this.zsRef = new DeflaterZStreamRef(this,
@@ -884,7 +884,7 @@ public class Deflater implements AutoCloseable {
      * Java fields are not initialized.
      * This method is mainly used to support the KAE-zip feature.
      */
-    public void resetKAE() {
+    void resetKAE() {
         synchronized (zsRef) {
             ensureOpen();
             reset(zsRef.address());

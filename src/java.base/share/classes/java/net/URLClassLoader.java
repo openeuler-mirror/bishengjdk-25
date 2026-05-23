@@ -32,6 +32,7 @@ import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.Permissions;
 import java.security.PermissionCollection;
+import java.security.ProtectionDomain;
 import java.security.SecureClassLoader;
 import java.util.Enumeration;
 import java.util.List;
@@ -360,6 +361,19 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
     protected Class<?> findClass(final String name)
         throws ClassNotFoundException
     {
+        if (AggressiveCDSPlugin.isEnabled()) {
+            try {
+                Class<?> trustedClass =
+                        AggressiveCDSPlugin.defineTrustedSharedClass(URLClassLoader.this, name);
+                if (trustedClass != null) {
+                    ProtectionDomain pd = trustedClass.getProtectionDomain();
+                    defineClassProtectionDomain(name, trustedClass, pd);
+                    return trustedClass;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
         String path = name.replace('.', '/').concat(".class");
         Resource res = ucp.getResource(path);
         if (res != null) {
@@ -375,6 +389,24 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
             }
         }
         throw new ClassNotFoundException(name);
+    }
+
+    /**
+     * Get ProtectionDomain by URL String.
+     * This method is invoked only in C++ for AggressiveCDS.
+     *
+     * @param urlNoFragString the URL String
+     *
+     * @return ProtectionDomain create from URL
+     */
+    private ProtectionDomain getProtectionDomainByURLString(String urlNoFragString) {
+        if (AggressiveCDSPlugin.isEnabled()) {
+            URL url = AggressiveCDSPlugin.getURLFromURLClassPath(ucp, urlNoFragString);
+            if (url != null) {
+                return getProtectionDomainFromURL(url);
+            }
+        }
+        return null;
     }
 
     /*

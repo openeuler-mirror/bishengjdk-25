@@ -318,7 +318,7 @@ public class InflaterInputStream extends FilterInputStream {
      * @param     n Maximum Read Bytes
      * @throws    IOException if an I/O error has occurred
      */
-    protected void fillKAE(int n) throws IOException {
+    void fillKAE(int n) throws IOException {
         ensureOpen();
         byte[] buftmp = new byte[buf.length];
         if (n != 0) {

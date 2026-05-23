@@ -119,7 +119,7 @@ public class Inflater implements AutoCloseable {
      * @param flushKAE inflate flush type (0~6)
      */
     @SuppressWarnings("this-escape")
-    public Inflater(int windowBits, int flushKAE) {
+    Inflater(int windowBits, int flushKAE) {
         this.zsRef = new InflaterZStreamRef(this, initKAE(windowBits, flushKAE));
     }
 
@@ -695,7 +695,7 @@ public class Inflater implements AutoCloseable {
      * Resets inflater so that a new set of input data can be processed.
      * This method is mainly used to support the KAE-zip feature.
      */
-    public void resetKAE() {
+    void resetKAE() {
         synchronized (zsRef) {
             ensureOpen();
             reset(zsRef.address());

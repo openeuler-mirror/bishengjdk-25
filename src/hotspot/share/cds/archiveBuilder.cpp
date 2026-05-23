@@ -480,6 +480,28 @@ void ArchiveBuilder::record_regenerated_object(address orig_src_obj, address reg
   // Record the fact that orig_src_obj has been replaced by regen_src_obj. All calls to get_buffered_addr(orig_src_obj)
   // should return the same value as get_buffered_addr(regen_src_obj).
   SourceObjInfo* p = _src_obj_table.get(regen_src_obj);
+  if (p == nullptr) {
+    if (CDSConfig::is_dumping_dynamic_archive()) {
+      // During dynamic archive dumping, regen_src_obj may not be in _src_obj_table in these cases:
+      //   (1) regen_src_obj is inside the mapped static archive (already archived in the base archive).
+      //       In this case, we can point orig_src_obj directly to regen_src_obj in the static archive.
+      //   (2) regen_src_obj was created during this run's LambdaFormInvokers regeneration, but is not
+      //       reachable through the dynamic archive's root iteration. In this case, we also point
+      //       orig_src_obj to regen_src_obj with point_to_it mode. This is safe because:
+      //       - If orig_src_obj is also in the static archive, no relocation will be performed on it
+      //         (mark_and_relocate_to_buffered_addr skips pointers in the mapped static archive).
+      //       - If orig_src_obj is not in any archive, it shouldn't have been referenced by any
+      //         archived object, so get_buffered_addr(orig_src_obj) won't be called.
+      // RegeneratedClasses only stores InstanceKlass and Method types.
+      MetaspaceObj::Type msotype = ((Klass*)regen_src_obj)->is_klass()
+                                   ? MetaspaceObj::ClassType : MetaspaceObj::MethodType;
+      SourceObjInfo orig_src_info(orig_src_obj, regen_src_obj, msotype);
+      bool created;
+      _src_obj_table.put_if_absent(orig_src_obj, orig_src_info, &created);
+      assert(created, "We shouldn't have archived the original copy of a regenerated object");
+      return;
+    }
+  }
   assert(p != nullptr, "regenerated object should always be dumped");
   SourceObjInfo orig_src_info(orig_src_obj, p);
   bool created;

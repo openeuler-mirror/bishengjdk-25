@@ -27,10 +27,17 @@
 #include "cds/runTimeClassInfo.hpp"
 #include "classfile/systemDictionaryShared.hpp"
 
+#include <string.h>
+
 void RunTimeClassInfo::init(DumpTimeClassInfo& info) {
   ArchiveBuilder* builder = ArchiveBuilder::current();
   InstanceKlass* k = info._klass;
   _klass_offset = builder->any_to_offset_u4(k);
+#if INCLUDE_AGGRESSIVE_CDS
+  _shared_class_file_offset = 0;
+  _url_string_offset = 0;
+  _classfile_timestamp = 0;
+#endif
 
   if (!SystemDictionaryShared::is_builtin(k)) {
     CrcInfo* c = crc();
@@ -72,6 +79,23 @@ void RunTimeClassInfo::init(DumpTimeClassInfo& info) {
       set_enum_klass_static_field_root_index_at(i, root_index);
     }
   }
+
+#if INCLUDE_AGGRESSIVE_CDS
+  size_t offset = enum_klass_static_fields_offset() +
+                  enum_klass_static_fields_size(info.num_enum_klass_static_fields());
+  if (info.shared_class_file_size() > 0) {
+    _shared_class_file_offset = checked_cast<u4>(offset);
+    memcpy(shared_class_file(), info.shared_class_file(), info.shared_class_file_size());
+    offset += info.shared_class_file_size();
+    info.free_shared_class_file();
+  }
+  if (info.url_string_size() > 0) {
+    _url_string_offset = checked_cast<u4>(offset);
+    memcpy(url_string(), info.url_string(), info.url_string_size());
+    info.free_url_string();
+  }
+  _classfile_timestamp = info.classfile_timestamp();
+#endif
 }
 
 InstanceKlass* RunTimeClassInfo::klass() const {

@@ -282,6 +282,34 @@ Java_java_lang_ClassLoader_defineClass0(JNIEnv *env,
     return result;
 }
 
+JNIEXPORT jclass JNICALL
+Java_java_lang_ClassLoader_defineClass3(JNIEnv *env,
+                                        jclass cls,
+                                        jobject loader,
+                                        jstring name)
+{
+    char *utfName;
+    jclass result = 0;
+    char buf[128];
+
+    if (name != NULL) {
+        utfName = getUTF(env, name, buf, sizeof(buf));
+        if (utfName == NULL) {
+            return result;
+        }
+        fixClassname(utfName);
+    } else {
+        utfName = NULL;
+    }
+
+    result = JVM_DefineTrustedSharedClass(env, utfName, loader);
+
+    if (utfName && utfName != buf)
+        free(utfName);
+
+    return result;
+}
+
 /*
  * Returns NULL if class not found.
  */

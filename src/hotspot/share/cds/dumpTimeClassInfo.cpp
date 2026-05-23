@@ -25,10 +25,13 @@
 #include "cds/archiveBuilder.hpp"
 #include "cds/dumpTimeClassInfo.inline.hpp"
 #include "cds/runTimeClassInfo.hpp"
+#include "classfile/classFileStream.hpp"
 #include "classfile/classLoader.hpp"
 #include "classfile/classLoaderData.inline.hpp"
 #include "classfile/systemDictionaryShared.hpp"
 #include "memory/resourceArea.hpp"
+
+#include <string.h>
 
 DumpTimeClassInfo::~DumpTimeClassInfo() {
   if (_verifier_constraints != nullptr) {
@@ -39,12 +42,24 @@ DumpTimeClassInfo::~DumpTimeClassInfo() {
   if (_loader_constraints != nullptr) {
     delete _loader_constraints;
   }
+#if INCLUDE_AGGRESSIVE_CDS
+  free_shared_class_file();
+  free_url_string();
+#endif
 }
 
 size_t DumpTimeClassInfo::runtime_info_bytesize() const {
+#if INCLUDE_AGGRESSIVE_CDS
+  return RunTimeClassInfo::byte_size(_klass, num_verifier_constraints(),
+                                     num_loader_constraints(),
+                                     num_enum_klass_static_fields(),
+                                     shared_class_file_size(),
+                                     url_string_size());
+#else
   return RunTimeClassInfo::byte_size(_klass, num_verifier_constraints(),
                                      num_loader_constraints(),
                                      num_enum_klass_static_fields());
+#endif
 }
 
 void DumpTimeClassInfo::add_verification_constraint(InstanceKlass* k, Symbol* name,
@@ -140,6 +155,54 @@ int DumpTimeClassInfo::enum_klass_static_field(int which_field) {
 bool DumpTimeClassInfo::is_builtin() {
   return SystemDictionaryShared::is_builtin(_klass);
 }
+
+#if INCLUDE_AGGRESSIVE_CDS
+void DumpTimeClassInfo::copy_shared_class_file(ClassFileStream* cfs) {
+  assert(_shared_class_file == nullptr, "already initialized");
+  int length = cfs->length();
+  size_t size = DTSharedData::byte_size(length);
+  _shared_class_file = (DTSharedData*)NEW_C_HEAP_ARRAY(u1, size, mtClassShared);
+  _shared_class_file->_length = length;
+  memcpy(_shared_class_file->_data, cfs->buffer(), length);
+}
+
+void DumpTimeClassInfo::free_shared_class_file() {
+  if (_shared_class_file != nullptr) {
+    FREE_C_HEAP_ARRAY(u1, _shared_class_file);
+    _shared_class_file = nullptr;
+  }
+}
+
+int DumpTimeClassInfo::shared_class_file_size() const {
+  if (_shared_class_file == nullptr) {
+    return 0;
+  }
+  return (int)DTSharedData::byte_size(_shared_class_file->_length);
+}
+
+void DumpTimeClassInfo::copy_url_string(const char* source) {
+  assert(_url_string == nullptr, "already initialized");
+  int length = (int)strlen(source) + 1;
+  size_t size = DTSharedData::byte_size(length);
+  _url_string = (DTSharedData*)NEW_C_HEAP_ARRAY(u1, size, mtClassShared);
+  _url_string->_length = length;
+  memcpy(_url_string->_data, source, length);
+}
+
+void DumpTimeClassInfo::free_url_string() {
+  if (_url_string != nullptr) {
+    FREE_C_HEAP_ARRAY(u1, _url_string);
+    _url_string = nullptr;
+  }
+}
+
+int DumpTimeClassInfo::url_string_size() const {
+  if (_url_string == nullptr) {
+    return 0;
+  }
+  return (int)DTSharedData::byte_size(_url_string->_length);
+}
+#endif
 
 DumpTimeClassInfo* DumpTimeSharedClassTable::allocate_info(InstanceKlass* k) {
   assert(CDSConfig::is_dumping_final_static_archive() || !k->is_shared(), "Do not call with shared classes");

@@ -39,11 +39,15 @@ CDSConst CDSConstants::offsets[] = {
   { "FileMapHeader::_jvm_ident",                          offset_of(FileMapHeader, _jvm_ident)                          },
   { "CDSFileMapRegion::_crc",                             offset_of(CDSFileMapRegion, _crc)                             },
   { "CDSFileMapRegion::_used",                            offset_of(CDSFileMapRegion, _used)                            },
+#if INCLUDE_AGGRESSIVE_CDS
+  { "DynamicArchiveHeader::_program_crc",                  offset_of(DynamicArchiveHeader, _program_crc)                 },
+#endif // INCLUDE_AGGRESSIVE_CDS
   { "DynamicArchiveHeader::_base_region_crc",             offset_of(DynamicArchiveHeader, _base_region_crc)             }
 };
 
 CDSConst CDSConstants::constants[] = {
   { "static_magic",                 (size_t)CDS_ARCHIVE_MAGIC         },
+  { "aggressive_magic",             (size_t)CDS_AGGRESSIVE_ARCHIVE_MAGIC },
   { "dynamic_magic",                (size_t)CDS_DYNAMIC_ARCHIVE_MAGIC },
   { "int_size",                     sizeof(int)                       },
   { "CDSFileMapRegion_size",        sizeof(CDSFileMapRegion)          },

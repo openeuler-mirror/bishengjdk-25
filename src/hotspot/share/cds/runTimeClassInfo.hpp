@@ -34,6 +34,7 @@
 #include "memory/metaspaceClosure.hpp"
 #include "oops/instanceKlass.hpp"
 #include "prims/jvmtiExport.hpp"
+#include "utilities/macros.hpp"
 #include "utilities/growableArray.hpp"
 
 class DumpTimeClassInfo;
@@ -73,9 +74,25 @@ class RunTimeClassInfo {
     int _root_indices[1];
   };
 
+#if INCLUDE_AGGRESSIVE_CDS
+  struct RTSharedData {
+    int _length;
+    u1  _data[1];
+
+    static size_t byte_size(int length) {
+      return align_up(offset_of(RTSharedData, _data) + length, wordSize);
+    }
+  };
+#endif
+
 private:
   u4 _klass_offset;
   u4 _nest_host_offset;
+#if INCLUDE_AGGRESSIVE_CDS
+  u4 _shared_class_file_offset;
+  u4 _url_string_offset;
+  int64_t _classfile_timestamp;
+#endif
   int _num_verifier_constraints;
   int _num_loader_constraints;
 
@@ -102,6 +119,11 @@ private:
     size_t size = num_fields <= 0 ? 0 : sizeof(RTEnumKlassStaticFields) + (num_fields - 1) * sizeof(int);
     return align_up(size, wordSize);
   }
+#if INCLUDE_AGGRESSIVE_CDS
+  static size_t shared_data_size(int size) {
+    return size <= 0 ? 0 : RTSharedData::byte_size(size);
+  }
+#endif
 
   static size_t nest_host_size(InstanceKlass* klass) {
     if (klass->is_hidden()) {
@@ -116,6 +138,22 @@ public:
   InstanceKlass* klass() const;
   int num_verifier_constraints() const { return _num_verifier_constraints; }
   int num_loader_constraints() const { return _num_loader_constraints; }
+#if INCLUDE_AGGRESSIVE_CDS
+  static size_t byte_size(InstanceKlass* klass, int num_verifier_constraints, int num_loader_constraints,
+                          int num_enum_klass_static_fields,
+                          int shared_class_file_size,
+                          int url_string_size) {
+    return header_size_size() +
+           crc_size(klass) +
+           nest_host_size(klass) +
+           loader_constraints_size(num_loader_constraints) +
+           verifier_constraints_size(num_verifier_constraints) +
+           verifier_constraint_flags_size(num_verifier_constraints) +
+           enum_klass_static_fields_size(num_enum_klass_static_fields) +
+           shared_data_size(shared_class_file_size) +
+           shared_data_size(url_string_size);
+  }
+#else
   static size_t byte_size(InstanceKlass* klass, int num_verifier_constraints, int num_loader_constraints,
                           int num_enum_klass_static_fields) {
     return header_size_size() +
@@ -126,6 +164,7 @@ public:
            verifier_constraint_flags_size(num_verifier_constraints) +
            enum_klass_static_fields_size(num_enum_klass_static_fields);
   }
+#endif
 
 private:
   size_t crc_offset() const {
@@ -148,7 +187,6 @@ private:
   size_t enum_klass_static_fields_offset() const {
     return verifier_constraint_flags_offset() + verifier_constraint_flags_size(_num_verifier_constraints);
   }
-
   void check_verifier_constraint_offset(int i) const {
     assert(0 <= i && i < _num_verifier_constraints, "sanity");
   }
@@ -161,6 +199,11 @@ private:
     assert(klass()->has_archived_enum_objs(), "sanity");
     return (RTEnumKlassStaticFields*)(address(this) + enum_klass_static_fields_offset());
   }
+#if INCLUDE_AGGRESSIVE_CDS
+  RTSharedData* shared_data_at(u4 offset) const {
+    return offset == 0 ? nullptr : (RTSharedData*)(address(this) + offset);
+  }
+#endif
 
 public:
   CrcInfo* crc() const {
@@ -195,6 +238,25 @@ public:
     check_loader_constraint_offset(i);
     return loader_constraints() + i;
   }
+
+#if INCLUDE_AGGRESSIVE_CDS
+  RTSharedData* shared_class_file() const {
+    return shared_data_at(_shared_class_file_offset);
+  }
+
+  RTSharedData* url_string() const {
+    return shared_data_at(_url_string_offset);
+  }
+
+  const char* url_string_data() const {
+    RTSharedData* data = url_string();
+    return data == nullptr ? nullptr : (const char*)data->_data;
+  }
+
+  int64_t classfile_timestamp() const {
+    return _classfile_timestamp;
+  }
+#endif
 
   void init(DumpTimeClassInfo& info);
 

@@ -506,7 +506,7 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   os::init_before_ergo();
 
-  jint ergo_result = Arguments::apply_ergo();
+  jint ergo_result = Arguments::apply_ergo(args);
   if (ergo_result != JNI_OK) return ergo_result;
 
   // Final check of all ranges after ergonomics which may change values.

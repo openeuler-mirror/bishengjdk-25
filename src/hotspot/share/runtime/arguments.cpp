@@ -56,6 +56,7 @@
 #include "runtime/flags/jvmFlagLimit.hpp"
 #include "runtime/globals_extension.hpp"
 #include "runtime/java.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/os.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/safepointMechanism.hpp"
@@ -442,6 +443,17 @@ void Arguments::init_version_specific_system_properties() {
   PropertyList_add(&_system_properties,
       new SystemProperty("java.vm.vendor", VM_Version::vm_vendor(),  false));
 }
+
+#if INCLUDE_AGGRESSIVE_CDS
+jint Arguments::init_aggressive_cds_properties() {
+  if (!CDSConfig::is_dumping_archive() && UseAggressiveCDS) {
+    if (!add_property("jdk.jbooster.aggressivecds.load=true", UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+  return JNI_OK;
+}
+#endif
 
 /*
  *  -XX argument processing:
@@ -3840,10 +3852,12 @@ void Arguments::set_compact_headers_flags() {
 #endif
 }
 
-jint Arguments::apply_ergo() {
+jint Arguments::apply_ergo(JavaVMInitArgs* args) {
   // Set flags based on ergonomics.
   jint result = set_ergonomics_flags();
   if (result != JNI_OK) return result;
+
+  AARCH64_ONLY(JavaThread::handle_appcds_for_executor(args);)
 
   // Set heap size based on available physical memory
   set_heap_size();
@@ -3857,6 +3871,11 @@ jint Arguments::apply_ergo() {
   }
 
   CDSConfig::ergo_initialize();
+
+#if INCLUDE_AGGRESSIVE_CDS
+  result = init_aggressive_cds_properties();
+  if (result != JNI_OK) return result;
+#endif
 
   // Initialize Metaspace flags and alignments
   Metaspace::ergo_initialize();

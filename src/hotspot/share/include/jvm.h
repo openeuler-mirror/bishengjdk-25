@@ -459,6 +459,10 @@ JVM_DefineClassWithSource(JNIEnv *env, const char *name, jobject loader,
                           const jbyte *buf, jsize len, jobject pd,
                           const char *source);
 
+/* Define an already-archived trusted shared class */
+JNIEXPORT jclass JNICALL
+JVM_DefineTrustedSharedClass(JNIEnv *env, const char *name, jobject loader);
+
 /*
  * Define a class with the specified lookup class.
  *  lookup:  Lookup class

@@ -87,6 +87,15 @@
 #define O_BINARY 0     // otherwise do nothing.
 #endif
 
+static bool is_dynamic_archive_magic(unsigned int magic) {
+#if INCLUDE_AGGRESSIVE_CDS
+  return magic == CDS_DYNAMIC_ARCHIVE_MAGIC ||
+         magic == CDS_AGGRESSIVE_ARCHIVE_MAGIC;
+#else
+  return magic == CDS_DYNAMIC_ARCHIVE_MAGIC;
+#endif
+}
+
 // Fill in the fileMapInfo structure with data about this VM instance.
 
 // This method copies the vm version info into header_version.  If the version is too
@@ -201,7 +210,14 @@ void FileMapHeader::populate(FileMapInfo *info, size_t core_region_alignment,
   set_base_archive_name_offset((unsigned int)base_archive_name_offset);
   set_base_archive_name_size((unsigned int)base_archive_name_size);
   if (CDSConfig::is_dumping_dynamic_archive()) {
-    set_magic(CDS_DYNAMIC_ARCHIVE_MAGIC);
+#if INCLUDE_AGGRESSIVE_CDS
+    if (UseAggressiveCDS) {
+      set_magic(CDS_AGGRESSIVE_ARCHIVE_MAGIC);
+    } else
+#endif
+    {
+      set_magic(CDS_DYNAMIC_ARCHIVE_MAGIC);
+    }
   } else if (CDSConfig::is_dumping_preimage_static_archive()) {
     set_magic(CDS_PREIMAGE_ARCHIVE_MAGIC);
   } else {
@@ -429,7 +445,7 @@ public:
     }
 
     if (gen_header._magic != CDS_ARCHIVE_MAGIC &&
-        gen_header._magic != CDS_DYNAMIC_ARCHIVE_MAGIC &&
+        !is_dynamic_archive_magic(gen_header._magic) &&
         gen_header._magic != CDS_PREIMAGE_ARCHIVE_MAGIC) {
       aot_log_warning(aot)("The %s has a bad magic number: %#x", file_type, gen_header._magic);
       return false;
@@ -490,7 +506,7 @@ public:
   }
 
   bool is_dynamic_archive() const {
-    return _header->_magic == CDS_DYNAMIC_ARCHIVE_MAGIC;
+    return is_dynamic_archive_magic(_header->_magic);
   }
 
   bool is_preimage_static_archive() const {
@@ -584,6 +600,7 @@ bool FileMapInfo::get_base_archive_name_from_header(const char* archive_name,
   switch (header->_magic) {
   case CDS_PREIMAGE_ARCHIVE_MAGIC:
     return false; // This is a binary config file, not a proper archive
+  case CDS_AGGRESSIVE_ARCHIVE_MAGIC:
   case CDS_DYNAMIC_ARCHIVE_MAGIC:
     break;
   default:
@@ -636,7 +653,15 @@ bool FileMapInfo::init_from_file(int fd) {
       return false;
     }
   } else {
-    if (gen_header->_magic != CDS_DYNAMIC_ARCHIVE_MAGIC) {
+    unsigned int expected_dynamic_magic = CDS_DYNAMIC_ARCHIVE_MAGIC;
+#if INCLUDE_AGGRESSIVE_CDS
+    if (UseAggressiveCDS) {
+      expected_dynamic_magic = CDS_AGGRESSIVE_ARCHIVE_MAGIC;
+    }
+#endif
+    if (gen_header->_magic != expected_dynamic_magic) {
+      aot_log_warning(aot)("Bad magic number: expected 0x%08x, actual 0x%08x.",
+                           expected_dynamic_magic, gen_header->_magic);
       aot_log_warning(aot)("Not a top shared archive: %s", _full_path);
       return false;
     }
@@ -943,6 +968,9 @@ static size_t write_bitmap(const CHeapBitMap* map, char* output, size_t offset) 
 // Relevant bitmaps then have lots of leading and trailing zeros, which
 // we do not have to store.
 size_t FileMapInfo::remove_bitmap_zeros(CHeapBitMap* map) {
+  if (map->size() == 0) {
+    return 0;
+  }
   BitMap::idx_t first_set = map->find_first_set_bit(0);
   BitMap::idx_t last_set  = map->find_last_set_bit(0);
   size_t old_size = map->size();

@@ -62,6 +62,12 @@ const char* CDSConfig::_output_archive_path = nullptr;
 
 JavaThread* CDSConfig::_dumper_thread = nullptr;
 
+static bool is_same_default_archive_path(const char* jvm_path, const char* archive_path, const char* name) {
+  stringStream path;
+  path.print("%s%s%s", jvm_path, os::file_separator(), name);
+  return os::same_files(path.base(), archive_path);
+}
+
 int CDSConfig::get_status() {
   assert(Universe::is_fully_initialized(), "status is finalized only after Universe is initialized");
   return (is_dumping_archive()              ? IS_DUMPING_ARCHIVE : 0) |
@@ -132,6 +138,37 @@ const char* CDSConfig::default_archive_path() {
   return _default_archive_path;
 }
 
+bool CDSConfig::is_default_archive_path(const char* archive_path) {
+  if (archive_path == nullptr) {
+    return false;
+  }
+
+  char jvm_path[JVM_MAXPATHLEN];
+  os::jvm_path(jvm_path, sizeof(jvm_path));
+  char *end = strrchr(jvm_path, *os::file_separator());
+  if (end != nullptr) *end = '\0';
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes.jsa")) {
+    return true;
+  }
+
+#ifdef _LP64
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_nocoops.jsa")) {
+    return true;
+  }
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_coh.jsa")) {
+    return true;
+  }
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_nocoops_coh.jsa")) {
+    return true;
+  }
+#endif
+
+  return false;
+}
+
 int CDSConfig::num_archive_paths(const char* path_spec) {
   if (path_spec == nullptr) {
     return 0;
@@ -182,9 +219,9 @@ void CDSConfig::ergo_init_classic_archive_paths() {
     }
     check_unsupported_dumping_module_options();
 
-    if (os::same_files(default_archive_path(), ArchiveClassesAtExit)) {
+    if (is_default_archive_path(ArchiveClassesAtExit)) {
       vm_exit_during_initialization(
-        "Cannot specify the default CDS archive for -XX:ArchiveClassesAtExit", default_archive_path());
+        "Cannot specify the default CDS archive for -XX:ArchiveClassesAtExit", ArchiveClassesAtExit);
     }
   }
 
