@@ -60,7 +60,11 @@ JfrStackTrace::JfrStackTrace() :
   _frames_ownership(false),
   _reached_root(false),
   _lineno(false),
-  _written(false) {}
+  _written(false)
+#if INCLUDE_JBOLT
+  , _hotcount(1)
+#endif 
+  {}
 
 JfrStackTrace::JfrStackTrace(traceid id, const JfrStackTrace& trace, const JfrStackTrace* next) :
   _next(next),
@@ -72,7 +76,11 @@ JfrStackTrace::JfrStackTrace(traceid id, const JfrStackTrace& trace, const JfrSt
   _frames_ownership(true),
   _reached_root(trace._reached_root),
   _lineno(trace._lineno),
-  _written(false) {
+  _written(false)
+#if INCLUDE_JBOLT
+  , _hotcount(trace._hotcount)
+#endif
+{
   copy_frames(_frames, trace._frames);
 }
 

@@ -44,6 +44,10 @@ class JfrStackTrace : public JfrCHeapObj {
   friend class ObjectSampleCheckpoint;
   friend class ObjectSampler;
   friend class StackTraceResolver;
+#if INCLUDE_JBOLT
+  friend class JBoltManager;
+#endif
+
  private:
   const JfrStackTrace* _next;
   JfrStackFrames* _frames;
@@ -55,6 +59,9 @@ class JfrStackTrace : public JfrCHeapObj {
   bool _reached_root;
   mutable bool _lineno;
   mutable bool _written;
+#if INCLUDE_JBOLT
+  u4 _hotcount;
+#endif
 
   const JfrStackTrace* next() const { return _next; }
 
@@ -87,6 +94,18 @@ class JfrStackTrace : public JfrCHeapObj {
   bool record(JavaThread* current_thread, int skip, int64_t stack_filter_id);
   bool record(JavaThread* jt, const frame& frame, bool in_continuation, const JfrSampleRequest& request);
   bool should_write() const { return !_written; }
+
+#if INCLUDE_JBOLT
+  u4 hotcount() const { return _hotcount; }
+  const JfrStackFrames* get_frames() const { return _frames; }
+  u4 get_framesCount() const { return _count; }
+
+  static ByteSize hash_offset()                 { return byte_offset_of(JfrStackTrace, _hash         ); }
+  static ByteSize id_offset()                   { return byte_offset_of(JfrStackTrace, _id           ); }
+  static ByteSize hotcount_offset()             { return byte_offset_of(JfrStackTrace, _hotcount     ); }
+  static ByteSize frames_offset()               { return byte_offset_of(JfrStackTrace, _frames       ); }
+  static ByteSize frames_count_offset()         { return byte_offset_of(JfrStackTrace, _count        ); }
+#endif
 };
 
 #endif // SHARE_JFR_RECORDER_STACKTRACE_JFRSTACKTRACE_HPP

@@ -44,12 +44,27 @@ class JfrStackTraceRepository : public JfrCHeapObj {
   friend class RecordStackTrace;
   friend class StackTraceBlobInstaller;
   friend class StackTraceRepository;
+#if INCLUDE_JBOLT
+  friend class JBoltManager;
+#endif
 
  private:
   static const u4 TABLE_SIZE = 2053;
   JfrStackTrace* _table[TABLE_SIZE];
   u4 _last_entries;
   u4 _entries;
+
+#if INCLUDE_JBOLT
+  // [jbolt]: an exclusive table for jbolt. It should be a subset of _table
+  JfrStackTrace* _table_jbolt[TABLE_SIZE];
+  u4 _last_entries_jbolt;
+  u4 _entries_jbolt;
+
+  static size_t clear_jbolt();
+  static size_t clear_jbolt(JfrStackTraceRepository& repo);
+  traceid add_trace_jbolt(const JfrStackTrace& stacktrace);
+  static traceid add_jbolt(JfrStackTraceRepository& repo, const JfrStackTrace& stacktrace);
+#endif
 
   JfrStackTraceRepository();
   static JfrStackTraceRepository& instance();
@@ -76,6 +91,14 @@ class JfrStackTraceRepository : public JfrCHeapObj {
  public:
   static traceid add(const JfrStackTrace& stacktrace);
   static traceid record(Thread* current_thread, int skip = 0, int64_t stack_filter_id = -1);
+#if INCLUDE_JBOLT
+  static traceid add_jbolt(const JfrStackTrace& stacktrace);
+  const JfrStackTrace* const * get_stacktrace_table() const { return _table; }
+  u4 get_entries_count() const { return _entries; }
+
+  const JfrStackTrace* const * get_stacktrace_table_jbolt() const { return _table_jbolt; }
+  u4 get_entries_count_jbolt() const { return _entries_jbolt; }
+#endif
 };
 
 #endif // SHARE_JFR_RECORDER_STACKTRACE_JFRSTACKTRACEREPOSITORY_HPP

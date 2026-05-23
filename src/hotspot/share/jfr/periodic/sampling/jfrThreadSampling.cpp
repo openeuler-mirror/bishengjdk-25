@@ -40,6 +40,9 @@
 #include "runtime/frame.inline.hpp"
 #include "runtime/javaThread.inline.hpp"
 #include "runtime/stackFrameStream.inline.hpp"
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif
 
 template <typename EventType>
 static inline void send_sample_event(const JfrTicks& start_time, const JfrTicks& end_time, traceid sid, traceid tid) {
@@ -290,7 +293,15 @@ static void record_thread_in_java(const JfrSampleRequest& request, const JfrTick
       // Unable to record stacktrace. Fail.
       return;
     }
-    sid = JfrStackTraceRepository::add(stacktrace);
+    sid = 0;
+#if INCLUDE_JBOLT
+    if (UseJBolt && JBoltManager::reorder_phase_is_profiling()) {
+      sid = JfrStackTraceRepository::add_jbolt(stacktrace);
+    } else
+#endif
+    {
+      sid = JfrStackTraceRepository::add(stacktrace);
+    }
   }
   assert(sid != 0, "invariant");
   const traceid tid = in_continuation ? tl->vthread_id_with_epoch_update(jt) : JfrThreadLocal::jvm_thread_id(jt);

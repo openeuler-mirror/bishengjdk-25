@@ -127,6 +127,7 @@ class os::Linux {
   static const char *libc_version()           { return _libc_version; }
   static const char *libpthread_version()     { return _libpthread_version; }
 
+  static void load_ACC_library();
   static void libpthread_init();
   static void sched_getcpu_init();
   static void chose_numa_nodes();
@@ -250,6 +251,15 @@ class os::Linux {
   typedef int (*numa_bitmask_isbitset_func_t)(struct bitmask *bmp, unsigned int n);
   // typedef int (*numa_bitmask_equal_func_t)(struct bitmask *bmp1, struct bitmask *bmp2);
   typedef int (*numa_distance_func_t)(int node1, int node2);
+
+#if INCLUDE_JBOLT
+  typedef void (*jboltLog_precalc_t)(unsigned int topFrameIndex, unsigned int &max_frames);
+  typedef bool (*jboltLog_do_t)(uintptr_t related_data[], address stacktrace, unsigned int i, int comp_level, address new_func, address *tempfunc);
+  typedef int (*jboltMerge_judge_t)(uintptr_t data_layout[], int candidate, address clusters, address merged, address cluster);
+  static jboltLog_precalc_t _jboltLog_precalc;
+  static jboltLog_do_t _jboltLog_do;
+  static jboltMerge_judge_t _jboltMerge_judge;
+#endif
 
   static sched_getcpu_func_t _sched_getcpu;
   static numa_node_to_cpus_func_t _numa_node_to_cpus;
@@ -570,6 +580,26 @@ class os::Linux {
       _numa_bitmask_free(bitmask);
     }
   }
+
+#if INCLUDE_JBOLT
+  static void jboltLog_precalc(unsigned int topFrameIndex, unsigned int &max_frames) {
+    if (_jboltLog_precalc != nullptr) {
+      _jboltLog_precalc(topFrameIndex, max_frames);
+    }
+  }
+  static bool jboltLog_do(uintptr_t related_data[], address stacktrace, unsigned int i, int comp_level, address new_func, address *tempfunc) {
+    if (_jboltLog_do != nullptr) {
+      return _jboltLog_do(related_data, stacktrace, i, comp_level, new_func, tempfunc);
+    }
+    return false;
+  }
+  static int jboltMerge_judge(uintptr_t data_layout[], int candidate, address clusters, address merged, address cluster) {
+    if (_jboltMerge_judge != nullptr) {
+      return _jboltMerge_judge(data_layout, candidate, clusters, merged, cluster);
+    }
+    return -1;
+  }
+#endif // INCLUDE_JBOLT
 };
 
 #endif // OS_LINUX_OS_LINUX_HPP

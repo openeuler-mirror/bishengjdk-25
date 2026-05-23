@@ -76,6 +76,9 @@
 #include "opto/compile.hpp"
 #include "opto/node.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif // INCLUDE_JBOLT
 
 // Helper class for printing in CodeCache
 class CodeBlob_sizes {
@@ -350,6 +353,16 @@ void CodeCache::initialize_heaps() {
   FLAG_SET_ERGO(NonProfiledCodeHeapSize, non_profiled.size);
   FLAG_SET_ERGO(ReservedCodeCacheSize, cache_size);
 
+#if INCLUDE_JBOLT
+  if (UseJBolt && !JBoltDumpMode) {
+    // We replace the original add-heap logic with the JBolt one. manual dump mode doesn't need that
+    JBoltManager::init_code_heaps(non_nmethod.size, profiled.size, non_profiled.size, cache_size, ps, min_size);
+    return;
+  }
+  // The following add-heap logic will not be executed if JBolt load mode is on.
+  // If the following logic is modified, remember to modify the JBolt logic accordingly.
+#endif // INCLUDE_JBOLT
+
   ReservedSpace rs = reserve_heap_memory(cache_size, ps);
 
   // Register CodeHeaps with LSan as we sometimes embed pointers to malloc memory.
@@ -399,6 +412,12 @@ ReservedSpace CodeCache::reserve_heap_memory(size_t size, size_t rs_ps) {
 
 // Heaps available for allocation
 bool CodeCache::heap_available(CodeBlobType code_blob_type) {
+  if (code_blob_type == CodeBlobType::MethodJBoltHot) {
+    return JBOLT_ONLY(UseJBolt && !JBoltDumpMode) NOT_JBOLT(false);
+  } else if (code_blob_type == CodeBlobType::MethodJBoltTmp) {
+    return JBOLT_ONLY(UseJBolt && !JBoltDumpMode) NOT_JBOLT(false);
+  }
+
   if (!SegmentedCodeCache) {
     // No segmentation: use a single code heap
     return (code_blob_type == CodeBlobType::All);
@@ -425,6 +444,12 @@ const char* CodeCache::get_code_heap_flag_name(CodeBlobType code_blob_type) {
     break;
   case CodeBlobType::MethodProfiled:
     return "ProfiledCodeHeapSize";
+    break;
+  case CodeBlobType::MethodJBoltHot:
+    return "JBoltHotCodeHeapSize";
+    break;
+  case CodeBlobType::MethodJBoltTmp:
+    return "JBoltTmpCodeHeapSize";
     break;
   default:
     ShouldNotReachHere();
@@ -570,6 +595,14 @@ CodeBlob* CodeCache::allocate(uint size, CodeBlobType code_blob_type, bool handl
             type = CodeBlobType::MethodNonProfiled;
           }
           break;
+#if INCLUDE_JBOLT
+        case CodeBlobType::MethodJBoltHot:
+          type = CodeBlobType::MethodNonProfiled;
+          break;
+        case CodeBlobType::MethodJBoltTmp:
+          type = CodeBlobType::MethodNonProfiled;
+          break;
+#endif // INCLUDE_JBOLT
         default:
           break;
         }

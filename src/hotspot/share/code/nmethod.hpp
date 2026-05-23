@@ -343,6 +343,11 @@ class nmethod : public CodeBlob {
   // findable by nmethod iterators! In particular, they must not contain oops!
   void* operator new(size_t size, int nmethod_size, bool allow_NonNMethod_space) throw();
 
+#if INCLUDE_JBOLT
+  // For JBolt. So the code can be allocated in code segments defined by JBolt.
+  void* operator new(size_t size, int nmethod_size, int comp_level, CodeBlobType code_blob_type) throw ();
+#endif // INCLUDE_JBOLT
+
   const char* reloc_string_for(u_char* begin, u_char* end);
 
   bool try_transition(signed char new_state);
@@ -567,6 +572,9 @@ public:
                               int speculations_len = 0,
                               JVMCINMethodData* jvmci_data = nullptr
 #endif
+#if INCLUDE_JBOLT
+                              , CodeBlobType code_blob_type = CodeBlobType::All  // for jbolt
+#endif // INCLUDE_JBOLT
   );
 
   static nmethod* new_native_nmethod(const methodHandle& method,

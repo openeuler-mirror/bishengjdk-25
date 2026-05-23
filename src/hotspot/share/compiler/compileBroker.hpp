@@ -165,6 +165,9 @@ public:
 class CompileBroker: AllStatic {
  friend class Threads;
  friend class CompileTaskWrapper;
+#if INCLUDE_JBOLT
+ friend class JBoltManager;
+#endif // INCLUDE_JBOLT
 
  public:
   enum {

@@ -50,6 +50,17 @@ class JfrStackFrame {
   void write(JfrCheckpointWriter& cpw) const;
   void resolve_lineno() const;
 
+#if INCLUDE_JBOLT
+  const InstanceKlass* get_klass() const { return _klass; }
+  traceid get_methodId() const { return _methodid; }
+  int get_byteCodeIndex() const { return _bci; }
+  u1 get_type() const { return _type; }
+
+  static ByteSize klass_offset()                 { return byte_offset_of(JfrStackFrame, _klass         ); }
+  static ByteSize methodid_offset()              { return byte_offset_of(JfrStackFrame, _methodid      ); }
+  static ByteSize bci_offset()                   { return byte_offset_of(JfrStackFrame, _bci           ); }
+  static ByteSize type_offset()                  { return byte_offset_of(JfrStackFrame, _type          ); }
+#endif
   enum : u1 {
     FRAME_INTERPRETER = 0,
     FRAME_JIT,
