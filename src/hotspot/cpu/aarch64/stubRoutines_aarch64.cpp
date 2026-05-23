@@ -48,6 +48,12 @@ STUBGEN_ARCH_ENTRIES_DO(DEFINE_ARCH_ENTRY, DEFINE_ARCH_ENTRY_INIT)
 
 bool StubRoutines::aarch64::_completed = false;
 
+// UTF conversion lookup tables derived from simdutf (https://github.com/simdutf/simdutf).
+// See src/hotspot/share/legal/simdutf.md for licensing details.
+#define STUB_ROUTINES_AARCH64_SIMDUTF_TABLES_IMPL
+#include "simdutf_utf_tables.hpp"
+#undef STUB_ROUTINES_AARCH64_SIMDUTF_TABLES_IMPL
+
 ATTRIBUTE_ALIGNED(64) uint16_t StubRoutines::aarch64::_kyberConsts[] =
 {
     // Because we sometimes load these in pairs, montQInvModR, kyber_q

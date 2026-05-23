@@ -43,6 +43,11 @@ JVM_SRC_DIRS += $(call uniq, $(wildcard $(foreach d, $(JVM_SRC_ROOTS), \
     $(JVM_VARIANT_OUTPUTDIR)/gensrc
     #
 
+JVM_ACC_PLUGIN_SRC := $(TOPDIR)/src/java.base/share/native/libjplugin/feature
+ifeq ($(wildcard $(JVM_ACC_PLUGIN_SRC)), $(JVM_ACC_PLUGIN_SRC))
+  JVM_SRC_DIRS += $(JVM_ACC_PLUGIN_SRC)
+endif
+
 JVM_CFLAGS_INCLUDES += \
     $(patsubst %,-I%,$(JVM_SRC_DIRS)) \
     -I$(TOPDIR)/src/hotspot/share/include \

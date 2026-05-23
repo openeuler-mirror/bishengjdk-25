@@ -124,6 +124,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
           range(1, 99)                                                  \
   product(ccstr, UseBranchProtection, "none",                           \
           "Branch Protection to use: none, standard, pac-ret")          \
+  product(bool, UseUTFConversionIntrinsics, false,                      \
+          "Use Intrinsics for conversion between UTF8 and UTF16")       \
   product(size_t, DynamicMaxHeapSizeLimit, ScaleForWordSize(96*M),      \
           "The limit of Dynamic maximum heap size (in bytes)")          \
   product(uintx, DynamicMaxHeapShrinkMinFreeRatio, 40,                  \

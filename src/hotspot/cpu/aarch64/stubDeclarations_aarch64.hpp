@@ -80,6 +80,14 @@
   do_stub(compiler, count_positives_long)                               \
   do_arch_entry(aarch64, compiler, count_positives_long,                \
                 count_positives_long, count_positives_long)             \
+  do_stub(compiler, convert_masked_utf8_to_utf16)                       \
+  do_arch_entry(aarch64, compiler, convert_masked_utf8_to_utf16,        \
+                convert_masked_utf8_to_utf16,                           \
+                convert_masked_utf8_to_utf16)                           \
+  do_stub(compiler, scalar_convert_utf8_to_utf16)                       \
+  do_arch_entry(aarch64, compiler, scalar_convert_utf8_to_utf16,        \
+                scalar_convert_utf8_to_utf16,                           \
+                scalar_convert_utf8_to_utf16)                           \
   do_stub(compiler, compare_long_string_LL)                             \
   do_arch_entry(aarch64, compiler, compare_long_string_LL,              \
                 compare_long_string_LL, compare_long_string_LL)         \
