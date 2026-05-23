@@ -3383,6 +3383,9 @@ void MacroAssembler::cmpxchgptr(Register oldv, Register newv, Register addr, Reg
   // newv holds value to write in exchange
   // addr identifies memory word to compare against/update
   if (UseLSE) {
+    if (UseLSEPrefetch) {
+      prfm(Address(addr), PSTL1STRM);
+    }
     mov(tmp, oldv);
     casal(Assembler::xword, oldv, newv, addr);
     cmp(tmp, oldv);
@@ -3425,6 +3428,9 @@ void MacroAssembler::cmpxchgw(Register oldv, Register newv, Register addr, Regis
   // addr identifies memory word to compare against/update
   // tmp returns 0/1 for success/failure
   if (UseLSE) {
+    if (UseLSEPrefetch) {
+      prfm(Address(addr), PSTL1STRM);
+    }
     mov(tmp, oldv);
     casal(Assembler::word, oldv, newv, addr);
     cmp(tmp, oldv);
@@ -3468,6 +3474,9 @@ void MacroAssembler::cmpxchg(Register addr, Register expected,
   if (result == noreg)  result = rscratch1;
   BLOCK_COMMENT("cmpxchg {");
   if (UseLSE) {
+    if (UseLSEPrefetch) {
+      prfm(Address(addr), PSTL1STRM);
+    }
     mov(result, expected);
     lse_cas(result, new_val, addr, size, acquire, release, /*not_pair*/ true);
     compare_eq(result, expected, size);
