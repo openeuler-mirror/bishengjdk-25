@@ -79,6 +79,9 @@
 #include "utilities/resourceHash.hpp"
 #include "utilities/stringUtils.hpp"
 
+#include <string.h>
+#include <sys/stat.h>
+
 SystemDictionaryShared::ArchiveInfo SystemDictionaryShared::_static_archive;
 SystemDictionaryShared::ArchiveInfo SystemDictionaryShared::_dynamic_archive;
 
@@ -497,6 +500,177 @@ void SystemDictionaryShared::set_shared_class_misc_info(InstanceKlass* k, ClassF
   info->_clsfile_size  = cfs->length();
   info->_clsfile_crc32 = ClassLoader::crc32(0, (const char*)cfs->buffer(), cfs->length());
 }
+
+#if INCLUDE_AGGRESSIVE_CDS
+
+static const char* AGGRESSIVE_CDS_CLASSFILE_SOURCE = "__VM_AggressiveCDS__";
+static const char* JAR_URL_PREFIX  = "jar:";
+static const char* FILE_URL_PREFIX = "file:";
+
+static bool starts_with(const char* value, const char* prefix) {
+  return value != nullptr && prefix != nullptr && strncmp(value, prefix, strlen(prefix)) == 0;
+}
+
+void SystemDictionaryShared::set_shared_class_file(InstanceKlass* k, ClassFileStream* cfs) {
+  assert(CDSConfig::is_dumping_archive(), "sanity");
+  assert(!is_builtin(k), "must be unregistered class");
+  DumpTimeClassInfo* info = get_info(k);
+  if (info->shared_class_file() == nullptr) {
+    info->copy_shared_class_file(cfs);
+  }
+}
+
+void SystemDictionaryShared::set_url_string(InstanceKlass* k, const char* source) {
+  assert(CDSConfig::is_dumping_archive(), "sanity");
+  assert(!is_builtin(k), "must be unregistered class");
+  DumpTimeClassInfo* info = get_info(k);
+  if (source != nullptr && source[0] != '\0' && info->url_string() == nullptr) {
+    info->copy_url_string(source);
+  }
+}
+
+bool SystemDictionaryShared::is_jar_url(const char* source) {
+  return starts_with(source, JAR_URL_PREFIX);
+}
+
+bool SystemDictionaryShared::is_regular_file_url(const char* source) {
+  return starts_with(source, FILE_URL_PREFIX) && !is_jar_url(source);
+}
+
+int64_t SystemDictionaryShared::get_timestamp_from_url(const char* source) {
+  if (!is_regular_file_url(source)) {
+    return 0;
+  }
+
+  ResourceMark rm;
+  const char* path = ClassLoader::uri_to_path(source);
+  struct stat st;
+  if (path != nullptr && os::stat(path, &st) == 0 && (st.st_mode & S_IFREG) != 0) {
+    return st.st_mtime;
+  }
+
+  return 0;
+}
+
+void SystemDictionaryShared::save_timestamp(InstanceKlass* k, const char* source) {
+  assert(CDSConfig::is_dumping_archive(), "sanity");
+  if (is_regular_file_url(source)) {
+    DumpTimeClassInfo* info = get_info(k);
+    info->set_classfile_timestamp(get_timestamp_from_url(source));
+  }
+}
+
+ClassFileStream* SystemDictionaryShared::get_shared_class_file_stream(InstanceKlass* k) {
+  const RunTimeClassInfo* info = RunTimeClassInfo::get_for(k);
+  RunTimeClassInfo::RTSharedData* data = info->shared_class_file();
+  if (data == nullptr) {
+    return nullptr;
+  }
+  return new ClassFileStream(data->_data, data->_length, AGGRESSIVE_CDS_CLASSFILE_SOURCE, false, false);
+}
+
+ClassFileStream* SystemDictionaryShared::get_byte_code_from_cache(Symbol* class_name,
+                                                                  Handle class_loader,
+                                                                  TRAPS) {
+  TempNewSymbol plugin_name = SymbolTable::new_symbol("java/net/AggressiveCDSPlugin");
+  Klass* plugin = SystemDictionary::resolve_or_null(plugin_name, Handle(), CHECK_NULL);
+  InstanceKlass* plugin_klass = (plugin != nullptr && plugin->is_instance_klass())
+      ? InstanceKlass::cast(plugin) : nullptr;
+  if (plugin_klass == nullptr) {
+    return nullptr;
+  }
+
+  JavaValue result(T_OBJECT);
+  Handle name = java_lang_String::create_from_symbol(class_name, CHECK_NULL);
+  TempNewSymbol method_name = SymbolTable::new_symbol("getByteCodeFromCache");
+  TempNewSymbol method_signature = SymbolTable::new_symbol("(Ljava/net/URLClassLoader;Ljava/lang/String;)[B");
+
+  JavaCalls::call_static(&result, plugin_klass, method_name, method_signature, class_loader, name, CHECK_NULL);
+
+  typeArrayHandle bytes(THREAD, (typeArrayOop)result.get_oop());
+  if (bytes.is_null()) {
+    return nullptr;
+  }
+
+  int len = bytes->length();
+  u1* buf = NEW_RESOURCE_ARRAY(u1, len);
+  memcpy(buf, (u1*)bytes->byte_at_addr(0), len);
+  return new ClassFileStream(buf, len, AGGRESSIVE_CDS_CLASSFILE_SOURCE, false, false);
+}
+
+static Handle get_protection_domain_by_url_string(Handle class_loader, const char* url_string, TRAPS) {
+  Handle url = java_lang_String::create_from_str(url_string, CHECK_NH);
+  JavaValue result(T_OBJECT);
+  JavaCalls::call_virtual(&result,
+                          class_loader,
+                          class_loader->klass(),
+                          vmSymbols::getProtectionDomainByURLString_name(),
+                          vmSymbols::getProtectionDomainByURLString_signature(),
+                          url,
+                          THREAD);
+  if (HAS_PENDING_EXCEPTION) {
+    CLEAR_PENDING_EXCEPTION;
+    return Handle();
+  }
+  return Handle(THREAD, result.get_oop());
+}
+
+InstanceKlass* SystemDictionaryShared::lookup_trusted_share_class(Symbol* class_name,
+                                                                  Handle class_loader,
+                                                                  TRAPS) {
+  if (!UseAggressiveCDS || !CDSConfig::is_using_archive()) {
+    return nullptr;
+  }
+  if (class_name == nullptr || class_loader.is_null()) {
+    return nullptr;
+  }
+  if (SystemDictionary::is_system_class_loader(class_loader()) ||
+      SystemDictionary::is_platform_class_loader(class_loader())) {
+    return nullptr;
+  }
+
+  const RunTimeClassInfo* record = find_record(&_static_archive._unregistered_dictionary,
+                                               &_dynamic_archive._unregistered_dictionary,
+                                               class_name);
+  if (record == nullptr) {
+    return nullptr;
+  }
+
+  const char* archived_url = record->url_string_data();
+  if (archived_url == nullptr || archived_url[0] == '\0') {
+    return nullptr;
+  }
+
+  if (CheckClassFileTimeStamp && record->classfile_timestamp() != 0) {
+    int64_t current_timestamp = get_timestamp_from_url(archived_url);
+    if (current_timestamp != record->classfile_timestamp()) {
+      return nullptr;
+    }
+  }
+
+  Handle lock = get_loader_lock_or_null(class_loader);
+  ObjectLocker ol(lock, THREAD);
+
+  register_loader(class_loader);
+
+  Handle protection_domain = get_protection_domain_by_url_string(class_loader, archived_url, CHECK_NULL);
+  if (protection_domain.is_null()) {
+    return nullptr;
+  }
+
+  InstanceKlass* k = acquire_class_for_current_thread(record->klass(),
+                                                      class_loader,
+                                                      protection_domain,
+                                                      nullptr,
+                                                      THREAD);
+  if (k != nullptr) {
+    SharedClassLoadingMark slm(THREAD, k);
+    k = find_or_define_instance_class(class_name, class_loader, k, CHECK_NULL);
+  }
+  return k;
+}
+
+#endif // INCLUDE_AGGRESSIVE_CDS
 
 void SystemDictionaryShared::initialize() {
   if (CDSConfig::is_dumping_archive()) {

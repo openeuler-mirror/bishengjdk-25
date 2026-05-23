@@ -34,6 +34,7 @@
 #include "classfile/systemDictionary.hpp"
 #include "oops/klass.hpp"
 #include "oops/oopHandle.hpp"
+#include "utilities/macros.hpp"
 
 
 /*===============================================================================
@@ -218,6 +219,21 @@ public:
 
   static void update_shared_entry(InstanceKlass* klass, int id);
   static void set_shared_class_misc_info(InstanceKlass* k, ClassFileStream* cfs);
+#if INCLUDE_AGGRESSIVE_CDS
+  static void set_shared_class_file(InstanceKlass* k, ClassFileStream* cfs);
+  static void set_url_string(InstanceKlass* k, const char* source);
+  static void save_timestamp(InstanceKlass* k, const char* source);
+  static ClassFileStream* get_shared_class_file_stream(InstanceKlass* k);
+  static ClassFileStream* get_byte_code_from_cache(Symbol* class_name,
+                                                   Handle class_loader,
+                                                   TRAPS);
+  static bool is_jar_url(const char* source);
+  static bool is_regular_file_url(const char* source);
+  static int64_t get_timestamp_from_url(const char* source);
+  static InstanceKlass* lookup_trusted_share_class(Symbol* class_name,
+                                                   Handle class_loader,
+                                                   TRAPS);
+#endif
 
   static InstanceKlass* lookup_from_stream(Symbol* class_name,
                                            Handle class_loader,

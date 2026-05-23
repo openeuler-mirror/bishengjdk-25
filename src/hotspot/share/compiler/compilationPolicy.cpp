@@ -578,8 +578,15 @@ void CompilationPolicy::initialize() {
 #ifdef COMPILER2
       c2_size = C2Compiler::initial_code_buffer_size();
 #endif
-      size_t buffer_size = c1_only ? c1_size : (c1_size/3 + 2*c2_size/3);
-      int max_count = (ReservedCodeCacheSize - (CodeCacheMinimumUseSpace DEBUG_ONLY(* 3))) / (int)buffer_size;
+      size_t buffer_size = 0;
+      if (c1_only) {
+        buffer_size = c1_size;
+      } else if (c2_only) {
+        buffer_size = c2_size;
+      } else {
+        buffer_size = c1_size / 3 + 2 * c2_size / 3;
+      }
+      int max_count = (NonNMethodCodeHeapSize - (CodeCacheMinimumUseSpace DEBUG_ONLY(* 3))) / buffer_size;
       if (count > max_count) {
         // Lower the compiler count such that all buffers fit into the code cache
         count = MAX2(max_count, min_count);
@@ -598,7 +605,7 @@ void CompilationPolicy::initialize() {
       count = 3;
       FLAG_SET_ERGO(CICompilerCount, count);
     }
-#endif
+#endif // _LP64
 
     if (c1_only) {
       // No C2 compiler threads are needed

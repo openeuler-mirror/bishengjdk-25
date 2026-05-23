@@ -36,6 +36,7 @@
 #include "gc/shared/genArguments.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "gc/shared/tlab_globals.hpp"
+#include "gc/shared/dynamicMaxHeap.hpp"
 #include "jvm.h"
 #include "logging/log.hpp"
 #include "logging/logConfiguration.hpp"
@@ -55,11 +56,13 @@
 #include "runtime/flags/jvmFlagLimit.hpp"
 #include "runtime/globals_extension.hpp"
 #include "runtime/java.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/os.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/synchronizer.hpp"
 #include "runtime/vm_version.hpp"
+#include "services/heapRedactor.hpp"
 #include "services/management.hpp"
 #include "utilities/align.hpp"
 #include "utilities/checkedCast.hpp"
@@ -440,6 +443,17 @@ void Arguments::init_version_specific_system_properties() {
   PropertyList_add(&_system_properties,
       new SystemProperty("java.vm.vendor", VM_Version::vm_vendor(),  false));
 }
+
+#if INCLUDE_AGGRESSIVE_CDS
+jint Arguments::init_aggressive_cds_properties() {
+  if (!CDSConfig::is_dumping_archive() && UseAggressiveCDS) {
+    if (!add_property("jdk.jbooster.aggressivecds.load=true", UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+  return JNI_OK;
+}
+#endif
 
 /*
  *  -XX argument processing:
@@ -1429,6 +1443,21 @@ void Arguments::set_use_compressed_oops() {
   // the only value that can override MaxHeapSize if we are
   // to use UseCompressedOops are InitialHeapSize and MinHeapSize.
   size_t max_heap_size = MAX3(MaxHeapSize, InitialHeapSize, MinHeapSize);
+
+#ifdef AARCH64
+  // DynamicMaxHeap
+  // 1. align DynamicMaxHeapSizeLimit
+  // 2. use DynamicMaxHeapSizeLimit to check whether compressedOops can enabled
+  bool dynamic_max_heap_enable = DynamicMaxHeapChecker::check_dynamic_max_heap_size_limit();
+  if (dynamic_max_heap_enable) {
+     Universe::set_dynamic_max_heap_enable(true);
+     DynamicMaxHeapConfig::set_initial_max_heap_size((size_t)MaxHeapSize);
+     size_t _heap_alignment = GCArguments::compute_heap_alignment();
+     uintx aligned_max_heap_size_limit = align_up(DynamicMaxHeapSizeLimit, _heap_alignment);
+     FLAG_SET_ERGO(DynamicMaxHeapSizeLimit, aligned_max_heap_size_limit);
+     max_heap_size = MAX2(max_heap_size, DynamicMaxHeapSizeLimit);
+  }
+#endif // AARCH64
 
   if (max_heap_size <= max_heap_for_compressed_oops()) {
     if (FLAG_IS_DEFAULT(UseCompressedOops)) {
@@ -2488,6 +2517,15 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, JVMFlagOrigin
     // -D
     } else if (match_option(option, "-D", &tail)) {
       const char* value;
+#ifndef AARCH64
+        if (match_option(option, "-DGZIP_USE_KAE=", &value)) {
+          if (strcmp(value, "true") == 0) {
+            jio_fprintf(defaultStream::output_stream(),
+            "-DGZIP_USE_KAE is not supported. This system property is valid only on aarch64 architecture machines.\n"
+            "The compression action is performed using the native compression capability of the JDK.\n");
+          }
+        }
+#endif
       if (match_option(option, "-Djava.endorsed.dirs=", &value) &&
             *value!= '\0' && strcmp(value, "\"\"") != 0) {
         // abort if -Djava.endorsed.dirs is set
@@ -3425,6 +3463,29 @@ jint Arguments::match_special_option_and_act(const JavaVMInitArgs* args,
       vm_exit(0);
     }
 
+    if (match_option(option, "-XX:HeapDumpRedact", &tail)) {
+      // HeapDumpRedact arguments.
+      if (!HeapRedactor::check_launcher_heapdump_redact_support(tail)) {
+        warning("Heap dump redacting did not setup properly, using wrong argument?");
+        vm_exit_during_initialization("Syntax error, expecting -XX:HeapDumpRedact=[off|names|basic|full|diyrules|annotation]",NULL);
+      }
+      continue;
+    }
+
+    // heapDump redact password
+    if(match_option(option, "-XX:RedactPassword=", &tail)) {
+      if(tail == NULL || strlen(tail) == 0) {
+        VerifyRedactPassword = false;
+      } else {
+        char* split_char = strstr(const_cast<char*>(tail), ",");
+        VerifyRedactPassword = !(split_char == NULL || strlen(split_char) < SALT_LEN);
+      }
+      if(!VerifyRedactPassword) {
+        jio_fprintf(defaultStream::output_stream(), "redact password is null or with bad format, disable verify heap dump authority.\n");
+      }
+    }
+
+
 #ifndef PRODUCT
     if (match_option(option, "-XX:+PrintFlagsWithComments")) {
       JVMFlag::printFlags(tty, true);
@@ -3737,6 +3798,17 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     warning("class load cause logging will not produce output without LogClassLoadingCauseFor");
   }
 
+#ifdef AARCH64
+  if (NUMANodes != NULL || NUMANodesRandom != 0) {
+    const char* numa_chosen_env = getenv("_JVM_NUMA_BINDING_DONE");
+    if (numa_chosen_env == NULL || strcmp(numa_chosen_env, "1") != 0) {
+      if (!UseNUMA) {
+        UseNUMA = true;
+      }
+    }
+  }
+#endif //AARCH64
+
   apply_debugger_ergo();
 
   // The VMThread needs to stop now and then to execute these debug options.
@@ -3780,10 +3852,12 @@ void Arguments::set_compact_headers_flags() {
 #endif
 }
 
-jint Arguments::apply_ergo() {
+jint Arguments::apply_ergo(JavaVMInitArgs* args) {
   // Set flags based on ergonomics.
   jint result = set_ergonomics_flags();
   if (result != JNI_OK) return result;
+
+  AARCH64_ONLY(JavaThread::handle_appcds_for_executor(args);)
 
   // Set heap size based on available physical memory
   set_heap_size();
@@ -3797,6 +3871,11 @@ jint Arguments::apply_ergo() {
   }
 
   CDSConfig::ergo_initialize();
+
+#if INCLUDE_AGGRESSIVE_CDS
+  result = init_aggressive_cds_properties();
+  if (result != JNI_OK) return result;
+#endif
 
   // Initialize Metaspace flags and alignments
   Metaspace::ergo_initialize();

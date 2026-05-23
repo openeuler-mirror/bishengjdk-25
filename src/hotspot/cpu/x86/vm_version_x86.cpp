@@ -59,7 +59,6 @@ address VM_Version::_cpuinfo_cont_addr = nullptr;
 address VM_Version::_cpuinfo_segv_addr_apx = nullptr;
 // Address of instruction after the one which causes APX specific SEGV
 address VM_Version::_cpuinfo_cont_addr_apx = nullptr;
-
 static BufferBlob* stub_blob;
 static const int stub_size = 2000;
 
@@ -1331,6 +1330,18 @@ void VM_Version::get_processor_features() {
     warning("Intrinsics for SHA-224 and SHA-256 crypto hash functions not available on this CPU.");
     FLAG_SET_DEFAULT(UseSHA256Intrinsics, false);
   }
+
+#ifdef _LP64
+  if (UnlockExperimentalVMOptions && UseFastSerializer && !FLAG_IS_DEFAULT(UseFastSerializer)) {
+     FLAG_SET_DEFAULT(UseFastSerializer, false);
+     warning("Serializer optimization is not supported in this VM.");
+  }
+  if (UnlockExperimentalVMOptions && UseHashMapIntegerCache && !FLAG_IS_DEFAULT(UseHashMapIntegerCache)) {
+    FLAG_SET_DEFAULT(UseHashMapIntegerCache, false);
+    warning("HashMap optimization is not supported in this VM.");
+  }
+
+#endif
 
   if (UseSHA && supports_avx2() && (supports_bmi2() || supports_sha512())) {
     if (FLAG_IS_DEFAULT(UseSHA512Intrinsics)) {

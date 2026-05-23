@@ -589,6 +589,24 @@ const int ObjectAlignmentInBytes = 8;
           "compression. Otherwise the level must be between 1 and 9.")      \
           range(0, 9)                                                       \
                                                                             \
+  product(ccstr, HeapDumpRedact, NULL, MANAGEABLE,                          \
+          "Redact the heapdump information to remove sensitive data")       \
+                                                                            \
+  product(ccstr, RedactMap, NULL, MANAGEABLE,                               \
+          "Redact the class and field names to other strings")              \
+                                                                            \
+  product(ccstr, RedactMapFile, NULL, MANAGEABLE,                           \
+          "File path of the Redact Map")                                    \
+                                                                            \
+  product(ccstr, RedactClassPath, NULL, MANAGEABLE,                         \
+          "full path of the Redact Annotation")                             \
+                                                                            \
+  product(bool, VerifyRedactPassword, false,                                \
+         "verify authority for operating heapDump redact feature")          \
+                                                                            \
+  product(ccstr, RedactPassword, NULL,                                      \
+         "authority for operating heapDump redact feature, format {password,salt}, salt length >= 8")                 \
+                                                                            \
   product(ccstr, NativeMemoryTracking, DEBUG_ONLY("summary") NOT_DEBUG("off"), \
           "Native memory tracking options")                                 \
                                                                             \
@@ -1950,8 +1968,17 @@ const int ObjectAlignmentInBytes = 8;
   JFR_ONLY(product(ccstr, StartFlightRecording, nullptr,                    \
           "Start flight recording with options"))                           \
                                                                             \
+  product(bool, UseFastSerializer, false, EXPERIMENTAL,                     \
+          "Cache-based serialization.It is extremely fast, but it"          \
+          "can only be effective in certain scenarios.")                    \
+                                                                            \
   product(bool, UseFastUnorderedTimeStamps, false, EXPERIMENTAL,            \
           "Use platform unstable time where supported for timestamps only") \
+                                                                            \
+  product(bool, UseHashMapIntegerCache, false, EXPERIMENTAL,                \
+          "The integer cache is an array of references to objects of"       \
+          "the HashMap Value type, indexed by the unboxed int key value."   \
+          "faster in execution, higher in memory consumption.")             \
                                                                             \
   product(bool, DeoptimizeNMethodBarriersALot, false, DIAGNOSTIC,           \
                 "Make nmethod barriers deoptimise a lot.")                  \
@@ -2009,6 +2036,9 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, StressSecondarySupers, false, DIAGNOSTIC,                   \
           "Use a terrible hash function in order to generate many collisions.") \
+                                                                            \
+  product(bool, ElasticMaxDirectMemory, false,                              \
+          "Allow change max direct memory size during runtime with jcmd")   \
                                                                             \
   product(bool, UseThreadsLockThrottleLock, true, DIAGNOSTIC,               \
           "Use an extra lock during Thread start and exit to alleviate"     \

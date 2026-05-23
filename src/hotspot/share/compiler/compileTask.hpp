@@ -64,6 +64,9 @@ class CompileTask : public CHeapObj<mtCompiler> {
       Reason_Whitebox,         // Whitebox API
       Reason_MustBeCompiled,   // Used for -Xcomp or AlwaysCompileLoopMethods (see CompilationPolicy::must_be_compiled())
       Reason_Bootstrap,        // JVMCI bootstrap
+#if INCLUDE_JBOLT
+      Reason_Reorder,          // JBolt reorder
+#endif
       Reason_Count
   };
 
@@ -77,6 +80,9 @@ class CompileTask : public CHeapObj<mtCompiler> {
       "whitebox",
       "must_be_compiled",
       "bootstrap"
+#if INCLUDE_JBOLT
+      , "reorder"
+#endif
     };
     return reason_names[compile_reason];
   }
@@ -265,6 +271,11 @@ public:
     print_inlining_inner(tty, method, inline_level, bci, result, msg);
   }
   static void print_inlining_ul(ciMethod* method, int inline_level, int bci, InliningResult result, const char* msg = nullptr);
+
+#if INCLUDE_JBOLT
+  int hot_count() { return _hot_count; }
+  const char* failure_reason() { return _failure_reason; }
+#endif // INCLUDE_JBOLT
 };
 
 #endif // SHARE_COMPILER_COMPILETASK_HPP

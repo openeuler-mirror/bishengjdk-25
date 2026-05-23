@@ -307,7 +307,10 @@ class SerializeClosure;
   template(jdk_internal_vm_annotation_JvmtiMountTransition_signature,  "Ljdk/internal/vm/annotation/JvmtiMountTransition;")  \
                                                                                                   \
   template(java_lang_ref_SoftReference_signature,         "Ljava/lang/ref/SoftReference;")        \
+  template(java_security_CodeSource_signature,            "Ljava/security/CodeSource;")           \
   template(java_security_ProtectionDomain_signature,      "Ljava/security/ProtectionDomain;")     \
+  template(getProtectionDomainByURLString_name,           "getProtectionDomainByURLString")       \
+  template(getProtectionDomainByURLString_signature,      "(Ljava/lang/String;)Ljava/security/ProtectionDomain;") \
                                                                                                   \
   /* Support for JSR 292 & invokedynamic (JDK 1.7 and above) */                                   \
   template(java_lang_invoke_CallSite,                 "java/lang/invoke/CallSite")                \
@@ -445,6 +448,7 @@ class SerializeClosure;
   template(cache_field_name,                          "cache")                                    \
   template(value_name,                                "value")                                    \
   template(compact_strings_name,                      "COMPACT_STRINGS")                          \
+  template(utf_conversion_intrinsics_name,            "UTF_CONVERSION_INTRINSICS")                \
   template(numberOfLeadingZeros_name,                 "numberOfLeadingZeros")                     \
   template(numberOfTrailingZeros_name,                "numberOfTrailingZeros")                    \
   template(bitCount_name,                             "bitCount")                                 \
@@ -737,6 +741,11 @@ class SerializeClosure;
   template(runtimeSetup,                                    "runtimeSetup")                                       \
   template(toFileURL_name,                                  "toFileURL")                                          \
   template(toFileURL_signature,                             "(Ljava/lang/String;)Ljava/net/URL;")                 \
+                                                                                                                  \
+  /* ElasticMaxDirectMemory */                                                                                    \
+  template(java_nio_Bits,                          "java/nio/Bits")                                               \
+  template(updateMaxMemory_name,                   "updateMaxMemory")                                             \
+  template(updateMaxMemory_signature,              "(J)Ljava/lang/String;")                                       \
                                                                                                                   \
   /* jcmd Thread.dump_to_file */                                                                                  \
   template(jdk_internal_vm_ThreadDumper,           "jdk/internal/vm/ThreadDumper")                                \

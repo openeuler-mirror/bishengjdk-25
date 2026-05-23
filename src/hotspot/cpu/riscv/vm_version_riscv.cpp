@@ -246,6 +246,16 @@ void VM_Version::common_initialize() {
       FLAG_SET_DEFAULT(UseZvfh, false);
     }
   }
+
+  if (UnlockExperimentalVMOptions && UseHashMapIntegerCache && !FLAG_IS_DEFAULT(UseHashMapIntegerCache)) {
+    FLAG_SET_DEFAULT(UseHashMapIntegerCache, false);
+    warning("HashMap optimization is not supported in this VM.");
+  }
+
+  if (UnlockExperimentalVMOptions && UseFastSerializer && !FLAG_IS_DEFAULT(UseFastSerializer)) {
+    FLAG_SET_DEFAULT(UseFastSerializer, false);
+    warning("Serializer optimization is not supported in this VM.");
+  }
 }
 
 #ifdef COMPILER2

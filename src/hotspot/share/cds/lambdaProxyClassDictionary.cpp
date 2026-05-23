@@ -33,6 +33,7 @@
 #include "memory/metaspaceClosure.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/method.hpp"
 
 DumpTimeLambdaProxyClassInfo::~DumpTimeLambdaProxyClassInfo() {
   if (_proxy_klasses != nullptr) {
@@ -463,6 +464,20 @@ void LambdaProxyClassDictionary::adjust_dumptime_table() {
 }
 
 class LambdaProxyClassDictionary::CleanupDumpTimeLambdaProxyClassTable: StackObj {
+  static bool is_member_method_excluded(Method* member_method) {
+    if (member_method == nullptr) {
+      return false;
+    }
+    if (!Method::is_valid_method(member_method)) {
+      return true;
+    }
+    InstanceKlass* holder = member_method->method_holder();
+    if (SystemDictionaryShared::check_for_exclusion(holder, nullptr) ||
+        SystemDictionaryShared::has_been_redefined(holder)) {
+      return true;
+    }
+    return false;
+  }
  public:
   bool do_entry(LambdaProxyClassKey& key, DumpTimeLambdaProxyClassInfo& info) {
     assert_lock_strong(DumpTimeTable_lock);
@@ -472,7 +487,8 @@ class LambdaProxyClassDictionary::CleanupDumpTimeLambdaProxyClassTable: StackObj
     // If the caller class and/or nest_host are excluded, the associated lambda proxy
     // must also be excluded.
     bool always_exclude = SystemDictionaryShared::check_for_exclusion(caller_ik, nullptr) ||
-                          SystemDictionaryShared::check_for_exclusion(nest_host, nullptr);
+                          SystemDictionaryShared::check_for_exclusion(nest_host, nullptr) ||
+                          is_member_method_excluded(key.member_method());
 
     for (int i = info._proxy_klasses->length() - 1; i >= 0; i--) {
       InstanceKlass* ik = info._proxy_klasses->at(i);

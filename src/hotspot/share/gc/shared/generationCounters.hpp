@@ -34,6 +34,9 @@
 class GenerationCounters: public CHeapObj<mtGC> {
   friend class VMStructs;
 
+ // Dynamic Max Heap
+  PerfVariable*      _max_size;            // max size can be change when Dynamic Max Heap is on
+
   PerfVariable*      _current_size;
 
   // Constant PerfData types don't need to retain a reference.
@@ -53,6 +56,9 @@ class GenerationCounters: public CHeapObj<mtGC> {
   ~GenerationCounters();
 
   void update_all(size_t curr_capacity);
+
+  // Dynamic Max Heap
+  void update_max_size(size_t size);
 
   const char* name_space() const        { return _name_space; }
 };

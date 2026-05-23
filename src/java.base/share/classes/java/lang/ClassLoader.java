@@ -878,6 +878,21 @@ public abstract class ClassLoader {
     }
 
     /**
+     * Determine protection domain, and check it.
+     * This method is only for AggressiveCDS.
+     *
+     * @param   name the name of the class
+     * @param   c the class
+     * @param   pd the ProtectionDomain of the class
+     * @since 25
+     */
+    protected void defineClassProtectionDomain(String name, Class<?> c, ProtectionDomain pd)
+    {
+        pd = preDefineClass(name, pd);
+        postDefineClass(c, pd);
+    }
+
+    /**
      * Converts an array of bytes into an instance of class {@code Class},
      * with a given {@code ProtectionDomain}.
      *
@@ -1060,6 +1075,11 @@ public abstract class ClassLoader {
     static native Class<?> defineClass2(ClassLoader loader, String name, java.nio.ByteBuffer b,
                                         int off, int len, ProtectionDomain pd,
                                         String source);
+
+    /**
+     * This method is only invoked in java.net.AggressiveCDSPlugin.
+     */
+    private static native Class<?> defineClass3(ClassLoader loader, String name);
 
     /**
      * Defines a class of the given flags via Lookup.defineClass.

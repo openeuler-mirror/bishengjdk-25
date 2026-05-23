@@ -61,6 +61,9 @@
 #include "oops/klass.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/symbol.hpp"
+#if defined(AARCH64) || defined(AMD64)
+#include "prims/upcallLinker.hpp"
+#endif // AARCH64 || AMD64
 #include "prims/jvm_misc.hpp"
 #include "prims/jvmtiAgentList.hpp"
 #include "prims/jvmtiEnvBase.hpp"
@@ -116,6 +119,10 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltDcmds.hpp"
+#include "jbolt/jBoltManager.hpp"
+#endif // INCLUDE_JBOLT
 
 // Initialization after module runtime initialization
 void universe_post_module_init();  // must happen after call_initPhase2
@@ -346,8 +353,12 @@ void Threads::initialize_java_lang_classes(JavaThread* main_thread, TRAPS) {
 
   initialize_class(vmSymbols::java_lang_String(), CHECK);
 
-  // Inject CompactStrings value after the static initializers for String ran.
+  // Inject CompactStrings and UseUTFConversionIntrinsics(AARCH64) value after the static initializers for String ran.
   java_lang_String::set_compact_strings(CompactStrings);
+
+#ifdef AARCH64
+  java_lang_String::set_utf_conversion_intrinsics(UseUTFConversionIntrinsics);
+#endif // AARCH64
 
   // Initialize java_lang.System (needed before creating the thread)
   initialize_class(vmSymbols::java_lang_System(), CHECK);
@@ -450,6 +461,11 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   // Initialize library-based TLS
   ThreadLocalStorage::init();
 
+#if defined(AARCH64) || defined(AMD64)
+  // Initialize ThreadLocalUpCall
+  ThreadLocalUpCall::init();
+#endif // AARCH64 || AMD64
+
   // Initialize the output stream module
   ostream_init();
 
@@ -490,7 +506,7 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   os::init_before_ergo();
 
-  jint ergo_result = Arguments::apply_ergo();
+  jint ergo_result = Arguments::apply_ergo(args);
   if (ergo_result != JNI_OK) return ergo_result;
 
   // Final check of all ranges after ergonomics which may change values.
@@ -587,6 +603,14 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   // Initialize Java-Level synchronization subsystem
   ObjectMonitor::Initialize();
   ObjectSynchronizer::initialize();
+
+#if INCLUDE_JBOLT
+  if (UseJBolt) {
+    JBoltManager::init_phase1();
+  } else {
+    JBoltManager::check_arguments_not_set();
+  }
+#endif // INCLUDE_JBOLT
 
   // Initialize global modules
   jint status = init_globals();
@@ -900,6 +924,22 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
     log.print_cr("At VM initialization completion:");
     ClassLoader::print_counters(&log);
   }
+
+  // Dynamic Max Heap: reset heap initial size to MaxHeapSize
+  if (Universe::is_dynamic_max_heap_enable()) {
+    bool success = Universe::heap()->change_max_heap(MaxHeapSize);
+    if (!success) {
+      log_error(dynamic, heap)("VM failed to initialize heap to Xmx " SIZE_FORMAT "K", (MaxHeapSize / K));
+      vm_exit(1);
+    }
+  }
+
+#if INCLUDE_JBOLT
+  register_jbolt_dcmds();
+  if (UseJBolt) {
+    JBoltManager::init_phase2(CATCH);
+  }
+#endif // INCLUDE_JBOLT
 
   return JNI_OK;
 }

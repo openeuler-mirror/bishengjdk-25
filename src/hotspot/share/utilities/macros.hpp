@@ -129,6 +129,32 @@
 #define NOT_CDS_RETURN_(code) { return code; }
 #endif // INCLUDE_CDS
 
+#ifndef INCLUDE_JBOLT
+#define INCLUDE_JBOLT 1
+#endif
+
+#if INCLUDE_JBOLT
+#define JBOLT_ONLY(x) x
+#define NOT_JBOLT(x)
+#else
+#define JBOLT_ONLY(x)
+#define NOT_JBOLT(x) x
+#endif // INCLUDE_JBOLT
+
+#ifndef INCLUDE_AGGRESSIVE_CDS
+#if INCLUDE_CDS && defined(AARCH64)
+#define INCLUDE_AGGRESSIVE_CDS 1
+#else
+#define INCLUDE_AGGRESSIVE_CDS 0
+#endif
+#endif // INCLUDE_AGGRESSIVE_CDS
+
+#if INCLUDE_AGGRESSIVE_CDS
+#define AGGRESSIVE_CDS_ONLY(x) x
+#else
+#define AGGRESSIVE_CDS_ONLY(x)
+#endif // INCLUDE_AGGRESSIVE_CDS
+
 #ifndef INCLUDE_MANAGEMENT
 #define INCLUDE_MANAGEMENT 1
 #endif // INCLUDE_MANAGEMENT
@@ -263,6 +289,9 @@
 #define JFR_ONLY(code)
 #define NOT_JFR_RETURN()      {}
 #define NOT_JFR_RETURN_(code) { return code; }
+#if INCLUDE_JBOLT
+#define INCLUDE_JBOLT 0 // INCLUDE_JBOLT depends on INCLUDE_JFR
+#endif
 #endif
 
 #ifndef INCLUDE_JVMCI

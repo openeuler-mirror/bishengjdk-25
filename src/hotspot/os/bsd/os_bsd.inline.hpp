@@ -59,4 +59,12 @@ inline void os::map_stack_shadow_pages(address sp) {
 inline bool os::can_trim_native_heap() { return false; }
 inline bool os::trim_native_heap(os::size_change_t* rss_change) { return false; }
 
+inline bool os::supports_monotonic_clock() {
+#ifdef __APPLE__
+  return true;
+#else
+  return Bsd::_clock_gettime != nullptr;
+#endif
+}
+
 #endif // OS_BSD_OS_BSD_INLINE_HPP

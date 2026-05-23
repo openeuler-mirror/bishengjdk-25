@@ -25,6 +25,7 @@
 
 package java.security;
 
+import java.net.URL;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -217,6 +218,19 @@ public class SecureClassLoader extends ClassLoader {
                 return pd;
             }
         });
+    }
+
+    /**
+     * Returns a cached ProtectionDomain for the specified URL.
+     *
+     * @param  url
+     *         The code source URL
+     * @return The cached protection domain for the given URL
+     * @since 25
+     */
+    protected ProtectionDomain getProtectionDomainFromURL(URL url) {
+        CodeSource cs = new CodeSource(url, (CodeSigner[]) null);
+        return getProtectionDomain(cs);
     }
 
     private record CodeSourceKey(CodeSource cs) {

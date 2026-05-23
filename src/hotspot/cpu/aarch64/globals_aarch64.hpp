@@ -101,6 +101,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Avoid generating unaligned memory accesses")                 \
   product(bool, UseLSE, false,                                          \
           "Use LSE instructions")                                       \
+  product(bool, UseLSEPrefetch, false,                                  \
+          "Prefetch before lock-related LSE instructions (CAS)")        \
   product(uint, UseSVE, 0,                                              \
           "Highest supported SVE instruction set version")              \
           range(0, 2)                                                   \
@@ -124,10 +126,43 @@ define_pd_global(intx, InlineSmallCode,          1000);
           range(1, 99)                                                  \
   product(ccstr, UseBranchProtection, "none",                           \
           "Branch Protection to use: none, standard, pac-ret")          \
+  product(bool, UseUTFConversionIntrinsics, false,                      \
+          "Use Intrinsics for conversion between UTF8 and UTF16")       \
+  product(size_t, DynamicMaxHeapSizeLimit, ScaleForWordSize(96*M),      \
+          "The limit of Dynamic maximum heap size (in bytes)")          \
+  product(uintx, DynamicMaxHeapShrinkMinFreeRatio, 40,                  \
+          "Minimal ratio of free bytes after dynamic max heap shirnk")  \
+  product(size_t, ElasticMaxHeapSize, ScaleForWordSize(96*M),           \
+          "Elastic maximum heap size (in bytes)")                       \
+  product(bool, ElasticMaxHeap, false,                                  \
+          "Allow change max heap size during runtime with jcmd")        \
+  product(bool, TraceElasticMaxHeap, false,                             \
+          "Trace Elastic Max Heap adjustion logs and failure reasons")  \
+  product(uintx, ElasticMaxHeapShrinkMinFreeRatio, 40,                  \
+          "minimal ratio of free bytes after elastic max heap shirnk")  \
   product(bool, AlwaysMergeDMB, true, DIAGNOSTIC,                       \
           "Always merge DMB instructions in code emission")             \
   product(bool, UseStlrForRelease, false,                               \
           "Use stlr instead of dmb ish + str for release stores")       \
+  product(bool, LogNUMANodes, false,                                    \
+          "Print NUMANodes")                                            \
+                                                                        \
+  product(ccstr, NUMANodes, NULL,                                       \
+          "This parameter provides the same functionality as"           \
+          "'numactl --all -N <nodes> -m <nodes>'."                      \
+          "<nodes> can be '0-2', '0,1,2', 'all' and so on.")            \
+                                                                        \
+  product(uintx, NUMANodesRandom, 0,                                    \
+          "Number of continuous nodes to bind to cpu"                   \
+          "with the first node randomly chosen."                        \
+          "If NUMANodes is set, NUMANodesRandom selects nodes randomly" \
+          "within this range.")                                         \
+  product(intx, NUMAMemNodesRandom, 0,                                  \
+          "Number of continuous nodes to bind to memory"                \
+          "with the first N nodes chosen by NUMANodesRandom.")          \
+  product(ccstr, NUMABindPolicy, NULL,                                  \
+          "Enable deterministic NUMA placement with combined Options,"  \
+          "including prefix=<id> and div=<N>.")                         \
 
 // end of ARCH_FLAGS
 

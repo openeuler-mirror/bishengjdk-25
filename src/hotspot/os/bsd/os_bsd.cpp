@@ -119,6 +119,8 @@ julong os::Bsd::_physical_memory = 0;
 #ifdef __APPLE__
 mach_timebase_info_data_t os::Bsd::_timebase_info = {0, 0};
 volatile uint64_t         os::Bsd::_max_abstime   = 0;
+#else
+int (*os::Bsd::_clock_gettime)(clockid_t, struct timespec *) = nullptr;
 #endif
 pthread_t os::Bsd::_main_thread;
 
@@ -787,16 +789,42 @@ double os::elapsedVTime() {
   return elapsedTime();
 }
 
+jlong os::javaTimeMillis() {
+  timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert(status != -1, "bsd error");
+  return jlong(time.tv_sec) * MILLIUNITS +
+         jlong(time.tv_usec) / (MICROUNITS / MILLIUNITS);
+}
+
+void os::javaTimeSystemUTC(jlong &seconds, jlong &nanos) {
+  timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert(status != -1, "bsd error");
+  seconds = jlong(time.tv_sec);
+  nanos = jlong(time.tv_usec) * (NANOUNITS / MICROUNITS);
+}
+
+#ifndef __APPLE__
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
+#endif
+
 #ifdef __APPLE__
 void os::Bsd::clock_init() {
   mach_timebase_info(&_timebase_info);
 }
 #else
 void os::Bsd::clock_init() {
-  // Nothing to do
+  struct timespec res;
+  struct timespec tp;
+  if (::clock_getres(CLOCK_MONOTONIC, &res) == 0 &&
+      ::clock_gettime(CLOCK_MONOTONIC, &tp) == 0) {
+    _clock_gettime = ::clock_gettime;
+  }
 }
 #endif
-
 
 
 #ifdef __APPLE__
@@ -830,6 +858,34 @@ void os::javaTimeNanos_info(jvmtiTimerInfo *info_ptr) {
   info_ptr->may_skip_backward = false;      // not subject to resetting or drifting
   info_ptr->may_skip_forward = false;       // not subject to resetting or drifting
   info_ptr->kind = JVMTI_TIMER_ELAPSED;     // elapsed not CPU time
+}
+#else
+
+jlong os::javaTimeNanos() {
+  if (os::supports_monotonic_clock()) {
+    struct timespec tp;
+    int status = Bsd::_clock_gettime(CLOCK_MONOTONIC, &tp);
+    assert(status == 0, "gettime error");
+    return jlong(tp.tv_sec) * NANOSECS_PER_SEC + jlong(tp.tv_nsec);
+  }
+
+  timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert(status != -1, "bsd error");
+  jlong usecs = jlong(time.tv_sec) * MICROUNITS + jlong(time.tv_usec);
+  return NANOUNITS / MICROUNITS * usecs;
+}
+
+void os::javaTimeNanos_info(jvmtiTimerInfo *info_ptr) {
+  info_ptr->max_value = all_bits_jlong;
+  if (os::supports_monotonic_clock()) {
+    info_ptr->may_skip_backward = false;
+    info_ptr->may_skip_forward = false;
+  } else {
+    info_ptr->may_skip_backward = true;
+    info_ptr->may_skip_forward = true;
+  }
+  info_ptr->kind = JVMTI_TIMER_ELAPSED;
 }
 #endif // __APPLE__
 

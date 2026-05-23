@@ -279,6 +279,7 @@ CollectedHeap::CollectedHeap() :
   _soft_ref_policy(),
   _is_stw_gc_active(false),
   _last_whole_heap_examined_time_ns(os::javaTimeNanos()),
+  _current_max_heap_size(MaxHeapSize),
   _total_collections(0),
   _total_full_collections(0),
   _gc_cause(GCCause::_no_gc),

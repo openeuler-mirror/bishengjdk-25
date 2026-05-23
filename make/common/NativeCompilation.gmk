@@ -153,6 +153,13 @@ define SetupNativeCompilationBody
 
   # Find all source files to compile and determine the output object file names
   $$(eval $$(call SetupSourceFiles,$1))
+  # if ldflags contain --wrap=memcpy, add memcpy.o to EXTRA_OBJECT_FILES
+  ifneq ($$(findstring wrap=memcpy, $$($1_LDFLAGS) $$($1_EXTRA_LDFLAGS)), )
+    ifeq ($$(filter $(SUPPORT_OUTPUTDIR)/memcpy/memcpy$(OBJ_SUFFIX), \
+        $$($1_EXTRA_OBJECT_FILES)), )
+      $1_EXTRA_OBJECT_FILES += $(SUPPORT_OUTPUTDIR)/memcpy/memcpy$(OBJ_SUFFIX)
+    endif
+  endif
   $$(eval $$(call SetupOutputFiles,$1))
 
   # Setup CFLAGS/CXXFLAGS based on warnings, optimizations, extra flags etc.

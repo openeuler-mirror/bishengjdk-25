@@ -301,7 +301,7 @@ import jdk.test.whitebox.WhiteBox;
 
 public class GetObjectSizeIntrinsicsTest extends ASimpleInstrumentationTestCase {
 
-    private static final boolean COMPACT_HEADERS = Platform.is64bit() && WhiteBox.getWhiteBox().getBooleanVMFlag("UseCompactObjectHeaders");
+    private static final boolean COMPACT_HEADERS = Platform.is64bit() && Platform.isAArch64() && WhiteBox.getWhiteBox().getBooleanVMFlag("UseCompactObjectHeaders");
     static final Boolean COMPRESSED_OOPS = WhiteBox.getWhiteBox().getBooleanVMFlag("UseCompressedOops");
     static final long REF_SIZE = (COMPRESSED_OOPS == null || COMPRESSED_OOPS == true) ? 4 : 8;
 

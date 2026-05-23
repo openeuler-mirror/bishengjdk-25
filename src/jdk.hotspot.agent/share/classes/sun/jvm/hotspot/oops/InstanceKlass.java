@@ -76,6 +76,7 @@ public class InstanceKlass extends Klass {
     constants            = new MetadataField(type.getAddressField("_constants"), 0);
     sourceDebugExtension = type.getAddressField("_source_debug_extension");
     innerClasses         = type.getAddressField("_inner_classes");
+    annotate             = type.getAddressField("_annotations");
     nestMembers          = type.getAddressField("_nest_members");
     nonstaticFieldSize   = new CIntField(type.getCIntegerField("_nonstatic_field_size"), 0);
     staticFieldSize      = new CIntField(type.getCIntegerField("_static_field_size"), 0);
@@ -151,6 +152,7 @@ public class InstanceKlass extends Klass {
   private static CIntField itableLen;
   private static CIntField nestHostIndex;
   private static AddressField breakpoints;
+  private static AddressField annotate;
 
   // type safe enum for ClassState from instanceKlass.hpp
   public static class ClassState {
@@ -729,6 +731,10 @@ public class InstanceKlass extends Klass {
         return allFields;
     }
 
+  public Annotation getAnnotation() {
+      Address addr = getAddress().getAddressAt(annotate.getOffset());
+      return VMObjectFactory.newObject(Annotation.class, addr);
+  }
 
     /** Return a List of SA Methods declared directly in this class/interface.
         Return an empty list if there are none, or if this isn't a class/

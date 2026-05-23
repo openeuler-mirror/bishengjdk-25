@@ -257,6 +257,49 @@ public:
   virtual void execute(DCmdSource source, TRAPS);
 };
 
+class ChangeMaxHeapDCmd : public DCmdWithParser {
+protected:
+  DCmdArgument<MemorySizeArgument> _new_max_heap_size;
+  static int num_arguments(ChangeMaxHeapDCmd* dcmd);
+public:
+  ChangeMaxHeapDCmd(outputStream* output, bool heap);
+  static const char* name() { return "GC.change_max_heap"; }
+  static const char* description() {
+    return "change dynamic max heap size during runtime.";
+  }
+  static const char* impact() {
+    return "Medium";
+  }
+  static int num_arguments();
+  virtual void execute(DCmdSource source, TRAPS);
+};
+
+class ElasticMaxHeapDCmd : public ChangeMaxHeapDCmd {
+public:
+  ElasticMaxHeapDCmd(outputStream* output, bool heap);
+  static const char* name() { return "GC.elastic_max_heap"; }
+  static const char* description() {
+    return "try elastic max heap size during runtime.";
+  }
+  static int num_arguments();
+};
+
+class ElasticMaxDirectMemoryDCmd : public DCmdWithParser {
+protected:
+  DCmdArgument<MemorySizeArgument> _new_max_direct_memory;
+public:
+  ElasticMaxDirectMemoryDCmd(outputStream* output, bool heap);
+  static const char* name() { return "GC.elastic_max_direct_memory"; }
+  static const char* description() {
+    return "try elastic max direct memory during runtime.";
+  }
+  static const char* impact() {
+    return "Medium";
+  }
+  static int num_arguments();
+  virtual void execute(DCmdSource source, TRAPS);
+};
+
 #if INCLUDE_SERVICES   // Heap dumping supported
 // See also: dump_heap in attachListener.cpp
 class HeapDumpDCmd : public DCmdWithParser {

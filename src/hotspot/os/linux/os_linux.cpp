@@ -129,6 +129,12 @@
   #include <sched.h>
 #endif
 
+#if defined(AARCH64)
+  __asm__(".symver fcntl64,fcntl@GLIBC_2.17");
+#elif defined(AMD64)
+  __asm__(".symver fcntl64,fcntl@GLIBC_2.2.5");
+#endif
+
 // if RUSAGE_THREAD for getrusage() has not been defined, do it here. The code calling
 // getrusage() is prepared to handle the associated failure.
 #ifndef RUSAGE_THREAD
@@ -1494,6 +1500,11 @@ void os::Linux::capture_initial_stack(size_t max_size) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // time support
+
+#ifndef SUPPORTS_CLOCK_MONOTONIC
+#error "Build platform doesn't support clock_gettime and related functionality"
+#endif
+
 double os::elapsedVTime() {
   struct rusage usage;
   int retval = getrusage(RUSAGE_THREAD, &usage);
@@ -1503,6 +1514,39 @@ double os::elapsedVTime() {
     // better than nothing, but not much
     return elapsedTime();
   }
+}
+
+jlong os::javaTimeMillis() {
+  if (os::Posix::supports_clock_gettime()) {
+    struct timespec ts;
+    int status = os::Posix::clock_gettime(CLOCK_REALTIME, &ts);
+    assert_status(status == 0, status, "clock_gettime");
+    return jlong(ts.tv_sec) * MILLIUNITS +
+           jlong(ts.tv_nsec) / NANOUNITS_PER_MILLIUNIT;
+  }
+
+  struct timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert_status(status == 0, errno, "gettimeofday");
+  return jlong(time.tv_sec) * MILLIUNITS +
+         jlong(time.tv_usec) / (MICROUNITS / MILLIUNITS);
+}
+
+void os::javaTimeSystemUTC(jlong &seconds, jlong &nanos) {
+  if (os::Posix::supports_clock_gettime()) {
+    struct timespec ts;
+    int status = os::Posix::clock_gettime(CLOCK_REALTIME, &ts);
+    assert_status(status == 0, status, "clock_gettime");
+    seconds = jlong(ts.tv_sec);
+    nanos = jlong(ts.tv_nsec);
+    return;
+  }
+
+  struct timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert_status(status == 0, errno, "gettimeofday");
+  seconds = jlong(time.tv_sec);
+  nanos = jlong(time.tv_usec) * (NANOUNITS / MICROUNITS);
 }
 
 void os::Linux::fast_thread_clock_init() {
@@ -1522,10 +1566,41 @@ void os::Linux::fast_thread_clock_init() {
 
   if (pthread_getcpuclockid_func &&
       pthread_getcpuclockid_func(_main_thread, &clockid) == 0 &&
-      clock_getres(clockid, &tp) == 0 && tp.tv_sec == 0) {
+      os::Posix::clock_getres(clockid, &tp) == 0 && tp.tv_sec == 0) {
     _supports_fast_thread_cpu_time = true;
     _pthread_getcpuclockid = pthread_getcpuclockid_func;
   }
+}
+
+jlong os::javaTimeNanos() {
+  if (os::supports_monotonic_clock()) {
+    struct timespec tp;
+    int status = os::Posix::clock_gettime(CLOCK_MONOTONIC, &tp);
+    assert_status(status == 0, status, "clock_gettime");
+    return jlong(tp.tv_sec) * NANOSECS_PER_SEC + jlong(tp.tv_nsec);
+  }
+
+  struct timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert_status(status == 0, errno, "gettimeofday");
+  jlong usecs = jlong(time.tv_sec) * MICROUNITS + jlong(time.tv_usec);
+  return NANOUNITS / MICROUNITS * usecs;
+}
+
+void os::javaTimeNanos_info(jvmtiTimerInfo *info_ptr) {
+  info_ptr->max_value = all_bits_jlong;
+
+  if (os::supports_monotonic_clock()) {
+    // CLOCK_MONOTONIC measures elapsed time since an arbitrary point in the past.
+    info_ptr->may_skip_backward = false;
+    info_ptr->may_skip_forward = false;
+  } else {
+    // gettimeofday uses the time-of-day clock and can move in either direction.
+    info_ptr->may_skip_backward = true;
+    info_ptr->may_skip_forward = true;
+  }
+
+  info_ptr->kind = JVMTI_TIMER_ELAPSED;
 }
 
 // thread_id is kernel thread id (similar to Solaris LWP id)
@@ -3269,6 +3344,10 @@ bool os::Linux::libnuma_init() {
                                            libnuma_dlsym(handle, "numa_node_to_cpus")));
       set_numa_node_to_cpus_v2(CAST_TO_FN_PTR(numa_node_to_cpus_v2_func_t,
                                               libnuma_v2_dlsym(handle, "numa_node_to_cpus")));
+      set_numa_node_of_cpu(CAST_TO_FN_PTR(numa_node_of_cpu_func_t,
+                                          libnuma_dlsym(handle, "numa_node_of_cpu")));
+      set_numa_num_configured_cpus(CAST_TO_FN_PTR(numa_num_configured_cpus_func_t,
+                                                  libnuma_dlsym(handle, "numa_num_configured_cpus")));
       set_numa_max_node(CAST_TO_FN_PTR(numa_max_node_func_t,
                                        libnuma_dlsym(handle, "numa_max_node")));
       set_numa_num_configured_nodes(CAST_TO_FN_PTR(numa_num_configured_nodes_func_t,
@@ -3280,7 +3359,7 @@ bool os::Linux::libnuma_init() {
       set_numa_interleave_memory(CAST_TO_FN_PTR(numa_interleave_memory_func_t,
                                                 libnuma_dlsym(handle, "numa_interleave_memory")));
       set_numa_interleave_memory_v2(CAST_TO_FN_PTR(numa_interleave_memory_v2_func_t,
-                                                libnuma_v2_dlsym(handle, "numa_interleave_memory")));
+                                                   libnuma_v2_dlsym(handle, "numa_interleave_memory")));
       set_numa_set_bind_policy(CAST_TO_FN_PTR(numa_set_bind_policy_func_t,
                                               libnuma_dlsym(handle, "numa_set_bind_policy")));
       set_numa_bitmask_isbitset(CAST_TO_FN_PTR(numa_bitmask_isbitset_func_t,
@@ -3291,12 +3370,39 @@ bool os::Linux::libnuma_init() {
                                        libnuma_dlsym(handle, "numa_distance")));
       set_numa_get_membind(CAST_TO_FN_PTR(numa_get_membind_func_t,
                                           libnuma_v2_dlsym(handle, "numa_get_membind")));
+      set_numa_get_mems_allowed(CAST_TO_FN_PTR(numa_get_mems_allowed_func_t,
+                                               libnuma_dlsym(handle, "numa_get_mems_allowed")));
+      set_numa_allocate_cpumask(CAST_TO_FN_PTR(numa_allocate_cpumask_func_t,
+                                               libnuma_dlsym(handle, "numa_allocate_cpumask")));
+      set_numa_allocate_nodemask(CAST_TO_FN_PTR(numa_allocate_nodemask_func_t,
+                                                libnuma_dlsym(handle, "numa_allocate_nodemask")));
+      set_numa_sched_setaffinity(CAST_TO_FN_PTR(numa_sched_setaffinity_func_t,
+                                                libnuma_dlsym(handle, "numa_sched_setaffinity")));
+      set_numa_bitmask_nbytes(CAST_TO_FN_PTR(numa_bitmask_nbytes_func_t,
+                                             libnuma_dlsym(handle, "numa_bitmask_nbytes")));
+      set_numa_bitmask_setbit(CAST_TO_FN_PTR(numa_bitmask_setbit_func_t,
+                                             libnuma_dlsym(handle, "numa_bitmask_setbit")));
+      set_numa_bitmask_clearall(CAST_TO_FN_PTR(numa_bitmask_clearall_func_t,
+                                             libnuma_dlsym(handle, "numa_bitmask_clearall")));
+
       set_numa_get_interleave_mask(CAST_TO_FN_PTR(numa_get_interleave_mask_func_t,
                                                   libnuma_v2_dlsym(handle, "numa_get_interleave_mask")));
       set_numa_move_pages(CAST_TO_FN_PTR(numa_move_pages_func_t,
                                          libnuma_dlsym(handle, "numa_move_pages")));
       set_numa_set_preferred(CAST_TO_FN_PTR(numa_set_preferred_func_t,
                                             libnuma_dlsym(handle, "numa_set_preferred")));
+      set_numa_get_run_node_mask(CAST_TO_FN_PTR(numa_get_run_node_mask_func_t,
+                                                libnuma_v2_dlsym(handle, "numa_get_run_node_mask")));
+      set_numa_parse_nodestring_all(CAST_TO_FN_PTR(numa_parse_nodestring_all_func_t,
+                                                   libnuma_dlsym(handle, "numa_parse_nodestring_all")));
+      set_numa_run_on_node_mask(CAST_TO_FN_PTR(numa_run_on_node_mask_func_t,
+                                               libnuma_v2_dlsym(handle, "numa_run_on_node_mask")));
+      set_numa_bitmask_equal(CAST_TO_FN_PTR(numa_bitmask_equal_func_t,
+                                            libnuma_v2_dlsym(handle, "numa_bitmask_equal")));
+      set_numa_set_membind(CAST_TO_FN_PTR(numa_set_membind_func_t,
+                                          libnuma_v2_dlsym(handle, "numa_set_membind")));
+      set_numa_bitmask_free(CAST_TO_FN_PTR(numa_bitmask_free_func_t,
+                                           libnuma_dlsym(handle, "numa_bitmask_free")));
       set_numa_get_run_node_mask(CAST_TO_FN_PTR(numa_get_run_node_mask_func_t,
                                                 libnuma_v2_dlsym(handle, "numa_get_run_node_mask")));
 
@@ -3306,6 +3412,8 @@ bool os::Linux::libnuma_init() {
         set_numa_nodes_ptr((struct bitmask **)libnuma_dlsym(handle, "numa_nodes_ptr"));
         set_numa_interleave_bitmask(_numa_get_interleave_mask());
         set_numa_membind_bitmask(_numa_get_membind());
+        set_numa_cpunodebind_bitmask(_numa_get_run_node_mask());
+        AARCH64_ONLY(chose_numa_nodes();)
         set_numa_cpunodebind_bitmask(_numa_get_run_node_mask());
         // Create an index -> node mapping, since nodes are not always consecutive
         _nindex_to_node = new (mtInternal) GrowableArray<int>(0, mtInternal);
@@ -3475,6 +3583,8 @@ GrowableArray<int>* os::Linux::_nindex_to_node;
 os::Linux::sched_getcpu_func_t os::Linux::_sched_getcpu;
 os::Linux::numa_node_to_cpus_func_t os::Linux::_numa_node_to_cpus;
 os::Linux::numa_node_to_cpus_v2_func_t os::Linux::_numa_node_to_cpus_v2;
+os::Linux::numa_node_of_cpu_func_t os::Linux::_numa_node_of_cpu;
+os::Linux::numa_num_configured_cpus_func_t os::Linux::_numa_num_configured_cpus;
 os::Linux::numa_max_node_func_t os::Linux::_numa_max_node;
 os::Linux::numa_num_configured_nodes_func_t os::Linux::_numa_num_configured_nodes;
 os::Linux::numa_available_func_t os::Linux::_numa_available;
@@ -3486,11 +3596,22 @@ os::Linux::numa_bitmask_isbitset_func_t os::Linux::_numa_bitmask_isbitset;
 os::Linux::numa_bitmask_equal_func_t os::Linux::_numa_bitmask_equal;
 os::Linux::numa_distance_func_t os::Linux::_numa_distance;
 os::Linux::numa_get_membind_func_t os::Linux::_numa_get_membind;
+os::Linux::numa_get_mems_allowed_func_t os::Linux::_numa_get_mems_allowed;
+os::Linux::numa_allocate_cpumask_func_t os::Linux::_numa_allocate_cpumask;
+os::Linux::numa_allocate_nodemask_func_t os::Linux::_numa_allocate_nodemask;
+os::Linux::numa_sched_setaffinity_func_t os::Linux::_numa_sched_setaffinity;
+os::Linux::numa_bitmask_nbytes_func_t os::Linux::_numa_bitmask_nbytes;
+os::Linux::numa_bitmask_setbit_func_t os::Linux::_numa_bitmask_setbit;
+os::Linux::numa_bitmask_clearall_func_t os::Linux::_numa_bitmask_clearall;
 os::Linux::numa_get_interleave_mask_func_t os::Linux::_numa_get_interleave_mask;
 os::Linux::numa_get_run_node_mask_func_t os::Linux::_numa_get_run_node_mask;
 os::Linux::numa_move_pages_func_t os::Linux::_numa_move_pages;
 os::Linux::numa_set_preferred_func_t os::Linux::_numa_set_preferred;
 os::Linux::NumaAllocationPolicy os::Linux::_current_numa_policy;
+os::Linux::numa_parse_nodestring_all_func_t os::Linux::_numa_parse_nodestring_all;
+os::Linux::numa_run_on_node_mask_func_t os::Linux::_numa_run_on_node_mask;
+os::Linux::numa_set_membind_func_t os::Linux::_numa_set_membind;
+os::Linux::numa_bitmask_free_func_t os::Linux::_numa_bitmask_free;
 unsigned long* os::Linux::_numa_all_nodes;
 struct bitmask* os::Linux::_numa_all_nodes_ptr;
 struct bitmask* os::Linux::_numa_nodes_ptr;
@@ -3509,6 +3630,10 @@ bool os::pd_uncommit_memory(char* addr, size_t size, bool exec) {
     return false;
   }
   return true;
+}
+
+bool os::pd_free_heap_physical_memory(char *addr, size_t bytes) {
+  return madvise(addr, bytes, MADV_DONTNEED) == 0;
 }
 
 static address get_stack_commited_bottom(address bottom, size_t size) {
@@ -4350,8 +4475,8 @@ OSReturn os::get_native_priority(const Thread* const thread,
 
 jlong os::Linux::fast_thread_cpu_time(clockid_t clockid) {
   struct timespec tp;
-  int status = clock_gettime(clockid, &tp);
-  assert(status == 0, "clock_gettime error: %s", os::strerror(errno));
+  int rc = os::Posix::clock_gettime(clockid, &tp);
+  assert(rc == 0, "clock_gettime is expected to return 0 code");
   return (tp.tv_sec * NANOSECS_PER_SEC) + tp.tv_nsec;
 }
 
@@ -4476,6 +4601,11 @@ void os::init(void) {
   FLAG_SET_DEFAULT(UseMadvPopulateWrite, (::madvise(nullptr, 0, MADV_POPULATE_WRITE) == 0));
 
   os::Posix::init();
+
+  if (!os::Posix::supports_monotonic_clock()) {
+    warning("No monotonic clock was available - timed services may "
+            "be adversely affected if the time-of-day clock changes");
+  }
 }
 
 // To install functions for atexit system call
@@ -4569,6 +4699,76 @@ void os::Linux::disable_numa(const char* reason, bool warning) {
   }
   FLAG_SET_ERGO(UseNUMA, false);
   FLAG_SET_ERGO(UseNUMAInterleaving, false);
+}
+
+#if INCLUDE_JBOLT
+os::Linux::jboltLog_precalc_t os::Linux::_jboltLog_precalc;
+os::Linux::jboltLog_do_t os::Linux::_jboltLog_do;
+os::Linux::jboltMerge_judge_t os::Linux::_jboltMerge_judge;
+#endif // INCLUDE_JBOLT
+os::Linux::heap_dict_add_t os::Linux::_heap_dict_add;
+os::Linux::heap_dict_lookup_t os::Linux::_heap_dict_lookup;
+os::Linux::heap_dict_free_t os::Linux::_heap_dict_free;
+os::Linux::heap_vector_add_t os::Linux::_heap_vector_add;
+os::Linux::heap_vector_get_next_t os::Linux::_heap_vector_get_next;
+os::Linux::heap_vector_free_t os::Linux::_heap_vector_free;
+
+void os::Linux::load_ACC_library() {
+#if INCLUDE_JBOLT
+    _jboltLog_precalc = CAST_TO_FN_PTR(jboltLog_precalc_t, dlsym(RTLD_DEFAULT, "JBoltLog_PreCalc"));
+    _jboltLog_do = CAST_TO_FN_PTR(jboltLog_do_t, dlsym(RTLD_DEFAULT, "JBoltLog_DO"));
+    _jboltMerge_judge = CAST_TO_FN_PTR(jboltMerge_judge_t, dlsym(RTLD_DEFAULT, "JBoltMerge_Judge"));
+#endif // INCLUDE_JBOLT
+  _heap_dict_add = CAST_TO_FN_PTR(heap_dict_add_t, dlsym(RTLD_DEFAULT, "HeapDict_Add"));
+  _heap_dict_lookup = CAST_TO_FN_PTR(heap_dict_lookup_t, dlsym(RTLD_DEFAULT, "HeapDict_Lookup"));
+  _heap_dict_free = CAST_TO_FN_PTR(heap_dict_free_t, dlsym(RTLD_DEFAULT, "HeapDict_Free"));
+  _heap_vector_add = CAST_TO_FN_PTR(heap_vector_add_t, dlsym(RTLD_DEFAULT, "HeapVector_Add"));
+  _heap_vector_get_next = CAST_TO_FN_PTR(heap_vector_get_next_t, dlsym(RTLD_DEFAULT, "HeapVector_GetNext"));
+  _heap_vector_free= CAST_TO_FN_PTR(heap_vector_free_t, dlsym(RTLD_DEFAULT, "HeapVector_Free"));
+
+  char path[JVM_MAXPATHLEN];
+  char ebuf[1024];
+  void* handle = nullptr;
+  if (os::dll_locate_lib(path, sizeof(path), Arguments::get_dll_dir(), "jvm25_Acc") ||
+        os::dll_locate_lib(path, sizeof(path), "/usr/lib64", "jvm25_Acc")) {
+    handle = dlopen(path, RTLD_LAZY);
+  }
+  if (handle != nullptr) {
+#if INCLUDE_JBOLT
+    if (_jboltLog_precalc == nullptr) {
+      _jboltLog_precalc = CAST_TO_FN_PTR(jboltLog_precalc_t, dlsym(handle, "JBoltLog_PreCalc"));
+    }
+    if (_jboltLog_do == nullptr) {
+      _jboltLog_do = CAST_TO_FN_PTR(jboltLog_do_t, dlsym(handle, "JBoltLog_DO"));
+    }
+    if (_jboltMerge_judge == nullptr) {
+      _jboltMerge_judge = CAST_TO_FN_PTR(jboltMerge_judge_t, dlsym(handle, "JBoltMerge_Judge"));
+    }
+#endif // INCLUDE_JBOLT
+
+    if(_heap_dict_add == NULL) {
+      _heap_dict_add = CAST_TO_FN_PTR(heap_dict_add_t, dlsym(handle, "HeapDict_Add"));
+    }
+    if(_heap_dict_lookup == NULL) {
+      _heap_dict_lookup = CAST_TO_FN_PTR(heap_dict_lookup_t, dlsym(handle, "HeapDict_Lookup"));
+    }
+    if(_heap_dict_free == NULL) {
+      _heap_dict_free = CAST_TO_FN_PTR(heap_dict_free_t, dlsym(handle, "HeapDict_Free"));
+    }
+    if(_heap_vector_add == NULL) {
+      _heap_vector_add = CAST_TO_FN_PTR(heap_vector_add_t, dlsym(handle, "HeapVector_Add"));
+    }
+    if(_heap_vector_get_next == NULL) {
+      _heap_vector_get_next = CAST_TO_FN_PTR(heap_vector_get_next_t, dlsym(handle, "HeapVector_GetNext"));
+    }
+    if(_heap_vector_free == NULL) {
+      _heap_vector_free= CAST_TO_FN_PTR(heap_vector_free_t, dlsym(handle, "HeapVector_Free"));
+    }
+  }
+
+  JBOLT_ONLY(log_debug(jbolt)("Plugin library for JBolt: %s %s %s", BOOL_TO_STR(_jboltLog_precalc != nullptr),
+                                                         BOOL_TO_STR(_jboltLog_do != nullptr),
+                                                         BOOL_TO_STR(_jboltMerge_judge != nullptr));)
 }
 
 #if defined(IA32) && !defined(ZERO)
@@ -4693,6 +4893,8 @@ jint os::init_2(void) {
   // Check if we need to adjust the stack size for glibc guard pages.
   init_adjust_stacksize_for_guard_pages();
 #endif
+
+  Linux::load_ACC_library();
 
   if (UseNUMA || UseNUMAInterleaving) {
     Linux::numa_init();

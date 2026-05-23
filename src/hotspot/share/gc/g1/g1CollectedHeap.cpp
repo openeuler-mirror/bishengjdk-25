@@ -118,6 +118,9 @@
 #include "utilities/bitMap.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/stack.inline.hpp"
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif // INCLUDE_JBOLT
 
 size_t G1CollectedHeap::_humongous_object_threshold_in_words = 0;
 
@@ -520,6 +523,10 @@ HeapWord* G1CollectedHeap::alloc_archive_region(size_t word_size, HeapWord* pref
   size_t commits = 0;
   // Attempt to allocate towards the end of the heap.
   HeapWord* start_addr = reserved.end() - align_up(word_size, G1HeapRegion::GrainWords);
+  if (Universe::is_dynamic_max_heap_enable()) {
+    HeapWord* end_addr = reserved.start() + MaxHeapSize / HeapWordSize;
+    start_addr = end_addr - align_up(word_size, G1HeapRegion::GrainWords);
+  }
   MemRegion range = MemRegion(start_addr, word_size);
   HeapWord* last_address = range.last();
   if (!_hrm.allocate_containing_regions(range, &commits, workers())) {
@@ -1651,6 +1658,11 @@ size_t G1CollectedHeap::recalculate_used() const {
 }
 
 bool  G1CollectedHeap::is_user_requested_concurrent_full_gc(GCCause::Cause cause) {
+#if INCLUDE_JBOLT
+  if (UseJBolt && cause == GCCause::_java_lang_system_gc && JBoltManager::gc_should_sweep_code_heaps_now()) {
+    return true;
+  }
+#endif // INCLUDE_JBOLT
   return GCCause::is_user_requested_gc(cause) && ExplicitGCInvokesConcurrent;
 }
 
@@ -2165,6 +2177,12 @@ size_t G1CollectedHeap::unsafe_max_tlab_alloc(Thread* ignored) const {
 }
 
 size_t G1CollectedHeap::max_capacity() const {
+  // Dynamic Max Heap
+  if (Universe::is_dynamic_max_heap_enable()) {
+    size_t cur_size = current_max_heap_size();
+    guarantee(cur_size <= max_num_regions() * G1HeapRegion::GrainBytes, "must be");
+    return cur_size;
+  }
   return max_num_regions() * G1HeapRegion::GrainBytes;
 }
 
@@ -2954,7 +2972,7 @@ public:
   }
 };
 
-void G1CollectedHeap::rebuild_region_sets(bool free_list_only) {
+void G1CollectedHeap::rebuild_region_sets(bool free_list_only, bool is_dynamic_max_heap_shrink) {
   assert_at_safepoint_on_vm_thread();
 
   if (!free_list_only) {
@@ -2970,7 +2988,10 @@ void G1CollectedHeap::rebuild_region_sets(bool free_list_only) {
   if (!free_list_only) {
     set_used(cl.total_used());
   }
-  assert_used_and_recalculate_used_equal(this);
+  // don't do this assert if is_dynamic_max_heap_shrink
+  if (!is_dynamic_max_heap_shrink) {
+    assert_used_and_recalculate_used_equal(this);
+  }
 }
 
 // Methods for the mutator alloc region
@@ -3192,4 +3213,11 @@ void G1CollectedHeap::prepare_group_cardsets_for_scan() {
   young_regions_cardset()->reset_table_scanner_for_groups();
 
   collection_set()->prepare_groups_for_scan();
+}
+
+bool G1CollectedHeap::change_max_heap(size_t new_size) {
+  assert_heap_not_locked();
+  G1_ChangeMaxHeapOp op(new_size);
+  VMThread::execute(&op);
+  return op.resize_success();
 }

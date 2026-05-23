@@ -165,6 +165,7 @@ public:
 
   // Points to the classes.jsa in $JAVA_HOME (could be input or output)
   static const char* default_archive_path()                  NOT_CDS_RETURN_(nullptr);
+  static bool is_default_archive_path(const char* archive_path) NOT_CDS_RETURN_(false);
   static const char* input_static_archive_path()             { return CDS_ONLY(_input_static_archive_path) NOT_CDS(nullptr); }
   static const char* input_dynamic_archive_path()            { return CDS_ONLY(_input_dynamic_archive_path) NOT_CDS(nullptr); }
   static const char* output_archive_path()                   { return CDS_ONLY(_output_archive_path) NOT_CDS(nullptr); }

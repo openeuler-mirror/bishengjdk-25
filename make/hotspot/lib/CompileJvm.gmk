@@ -241,6 +241,14 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJVM, \
     PRECOMPILED_HEADER_EXCLUDE := $(JVM_PRECOMPILED_HEADER_EXCLUDE), \
 ))
 
+MEMCPY_OBJECT_FILE := $(JVM_OUTPUTDIR)/objs/memcpy$(OBJ_SUFFIX)
+
+$(eval $(call SetupCopyFiles, COPY_MEMCPY_OBJECT_FILE, \
+    DEST := $(SUPPORT_OUTPUTDIR)/memcpy, \
+    FILES := $(MEMCPY_OBJECT_FILE), \
+))
+TARGETS += $(COPY_MEMCPY_OBJECT_FILE)
+
 ifeq ($(call isTargetOs, windows), true)
   # The following lines create a list of vftable symbols to be filtered out of
   # the symbol file. Removing this line causes the linker to complain about too

@@ -385,7 +385,7 @@ class Arguments : AllStatic {
   static bool parse_uint(const char* value, uint* uintx_arg,
                          uint min_size);
   // Apply ergonomics
-  static jint apply_ergo();
+  static jint apply_ergo(JavaVMInitArgs* args);
   // Adjusts the arguments after the OS have adjusted the arguments
   static jint adjust_after_os();
 
@@ -453,6 +453,9 @@ class Arguments : AllStatic {
 
   // Update/Initialize System properties after JDK version number is known
   static void init_version_specific_system_properties();
+#if INCLUDE_AGGRESSIVE_CDS
+  static jint init_aggressive_cds_properties();
+#endif
 
   // Update VM info property - called after argument parsing
   static void update_vm_info_property(const char* vm_info) {

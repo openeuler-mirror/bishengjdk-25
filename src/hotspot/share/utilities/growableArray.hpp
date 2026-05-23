@@ -31,6 +31,9 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/powerOfTwo.hpp"
+#if INCLUDE_JBOLT
+#include "utilities/sizes.hpp"
+#endif // INCLUDE_JBOLT
 
 // A growable array.
 
@@ -123,6 +126,10 @@ protected:
   ~GrowableArrayView() {}
 
 public:
+#if INCLUDE_JBOLT
+   static ByteSize data_offset()  { return byte_offset_of(GrowableArrayView, _data); }
+#endif // INCLUDE_JBOLT
+
   bool operator==(const GrowableArrayView& rhs) const {
     if (_len != rhs._len)
       return false;

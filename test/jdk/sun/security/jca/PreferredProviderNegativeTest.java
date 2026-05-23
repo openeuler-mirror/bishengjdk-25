@@ -107,7 +107,12 @@ public class PreferredProviderNegativeTest {
 
         String expected;
         String value = args[1];
-        expected = System.getProperty("test.provider.name", "SunJCE");
+
+        if (Security.getProperty("security.provider.1").equals("org.openeuler.security.openssl.KAEProvider")) {
+            expected = "KAEProvider";
+        } else {
+            expected = System.getProperty("test.provider.name", "SunJCE");
+        }
 
         if (args.length >= 2) {
             switch (args[0]) {

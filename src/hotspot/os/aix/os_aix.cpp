@@ -890,6 +890,22 @@ double os::elapsedVTime() {
   }
 }
 
+jlong os::javaTimeMillis() {
+  timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert(status != -1, "aix error at gettimeofday()");
+  return jlong(time.tv_sec) * MILLIUNITS +
+         jlong(time.tv_usec) / (MICROUNITS / MILLIUNITS);
+}
+
+void os::javaTimeSystemUTC(jlong &seconds, jlong &nanos) {
+  timeval time;
+  int status = gettimeofday(&time, nullptr);
+  assert(status != -1, "aix error at gettimeofday()");
+  seconds = jlong(time.tv_sec);
+  nanos = jlong(time.tv_usec) * (NANOUNITS / MICROUNITS);
+}
+
 // We use mread_real_time here.
 // On AIX: If the CPU has a time register, the result will be RTC_POWER and
 // it has to be converted to real time. AIX documentations suggests to do

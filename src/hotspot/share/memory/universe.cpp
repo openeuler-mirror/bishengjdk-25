@@ -234,6 +234,9 @@ static BuiltinException _array_index_out_of_bounds_exception;
 static BuiltinException _array_store_exception;
 static BuiltinException _class_cast_exception;
 
+// Dynamic Max Heap
+bool            Universe::_enable_dynamic_max_heap = false;
+
 objArrayOop Universe::the_empty_class_array ()  {
   return (objArrayOop)_the_empty_class_array.resolve();
 }

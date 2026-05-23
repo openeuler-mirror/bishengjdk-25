@@ -155,6 +155,12 @@ private:
       _size_in_bytes(0), _msotype(renegerated_obj_info->_msotype),
       _source_addr(src),  _buffered_addr(renegerated_obj_info->_buffered_addr) {}
 
+    SourceObjInfo(address src, address regen_addr, MetaspaceObj::Type msotype) :
+      _ptrmap_start(0), _ptrmap_end(0), _read_only(false),
+      _follow_mode(point_to_it),
+      _size_in_bytes(0), _msotype(msotype),
+      _source_addr(src),  _buffered_addr(regen_addr) {}
+
     bool should_copy() const { return _follow_mode == make_a_copy; }
     void set_buffered_addr(address addr)  {
       assert(should_copy(), "must be");

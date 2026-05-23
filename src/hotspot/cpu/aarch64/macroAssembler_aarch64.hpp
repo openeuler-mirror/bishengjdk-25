@@ -1563,6 +1563,23 @@ public:
                         FloatRegister vtmp2, FloatRegister vtmp3,
                         FloatRegister vtmp4, FloatRegister vtmp5);
 
+  void encode_utf8_from_utf16(Register src, Register dst,
+                              Register len, Register res,
+                              FloatRegister vtmp0, FloatRegister vtmp1,
+                              FloatRegister vtmp2, FloatRegister vtmp3,
+                              FloatRegister vtmp4, FloatRegister vtmp5,
+                              FloatRegister vtmp6, FloatRegister vtmp7,
+                              FloatRegister vtmp8, FloatRegister vtmp9);
+
+  void decode_utf8_to_utf16(Register src, Register dst,
+                            Register len, Register res,
+                            FloatRegister vtmp0, FloatRegister vtmp1,
+                            FloatRegister vtmp2, FloatRegister vtmp3,
+                            FloatRegister vtmp4, FloatRegister vtmp5,
+                            FloatRegister vtmp6, FloatRegister vtmp7,
+                            FloatRegister vtmp8, FloatRegister vtmp9,
+                            FloatRegister vtmp10);
+
   void generate_dsin_dcos(bool isCos, address npio2_hw, address two_over_pi,
       address pio2, address dsin_coef, address dcos_coef);
  private:

@@ -30,7 +30,10 @@ import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.*;
 import java.security.spec.*;
+import java.text.MessageFormat;
 import java.util.Arrays;
+import java.lang.reflect.Field;
+import java.lang.reflect.Array;
 import javax.crypto.SecretKey;
 import javax.crypto.interfaces.DHKey;
 import javax.crypto.interfaces.DHPublicKey;
@@ -192,6 +195,56 @@ public final class KeyUtil {
             return nps.getName();
         }
         return key.getAlgorithm();
+    }
+
+    /**
+     * Returns the algorithm name of the given key object. If an EC key is
+     * specified, returns the algorithm name and its named curve.
+     *
+     * @param key the key object, cannot be null
+     * @param rb the resource bundle
+     * @return the algorithm name of the given key object, or return in the
+     *       form of "EC (named curve)" if the given key object is an EC key
+     */
+    public static final String fullDisplayAlgName(Key key, java.util.ResourceBundle rb) {
+        String result = key.getAlgorithm();
+        if (key instanceof ECKey) {
+            ECParameterSpec paramSpec = ((ECKey) key).getParams();
+            if (paramSpec instanceof NamedCurve nc) {
+                result += " (" + nc.getNameAndAliases()[0] + ")";
+            } else if (paramSpec.getClass().getSimpleName().equals("KAENamedCurve")) {
+                try {
+                    Field na = paramSpec.getClass().getDeclaredField("nameAndAliases");
+                    na.setAccessible(true);
+                    result += " (" + (String)Array.get(na.get(paramSpec), 0) + ")";
+                } catch (NoSuchFieldException | IllegalAccessException e) {
+                    MessageFormat form = new MessageFormat(rb.getString
+                            ("can.not.get.field"));
+                          Object[] source = {"KAENamedCurveException"};
+                          System.out.println(form.format(source));
+                }
+            } else if (paramSpec instanceof ECParameterSpec && key.getClass().getSimpleName().equals(
+                    "KAEECPrivateKeyImpl")) {
+                if (getKeySize(key) == -1) {
+                    result += " (secp256r1)";
+                } else {
+                    try {
+                        AlgorithmParameters ap = AlgorithmParameters.getInstance("EC");
+                        ap.init(new ECKeySizeParameterSpec(getKeySize(key)));
+                        // The following line assumes the toString value is "name (oid)"
+                        result += " (" + ap.toString().split(" ")[0] + ")";
+                    } catch (Exception e) {
+                        MessageFormat form = new MessageFormat(rb.getString
+                                ("can.not.get.param"));
+                        Object[] source = {"KAEECPrivateKeyImplException"};
+                        System.out.println(form.format(source));
+                    }
+                }
+            }
+        } else if (key instanceof EdECKey) {
+            result = ((EdECKey) key).getParams().getName();
+        }
+        return result;
     }
 
     /**

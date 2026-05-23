@@ -56,4 +56,9 @@ inline void os::map_stack_shadow_pages(address sp) {
 inline bool os::can_trim_native_heap() { return false; }
 inline bool os::trim_native_heap(os::size_change_t* rss_change) { return false; }
 
+inline bool os::supports_monotonic_clock() {
+  // mread_real_time() is monotonic on AIX (see os::javaTimeNanos() comments)
+  return true;
+}
+
 #endif // OS_AIX_OS_AIX_INLINE_HPP

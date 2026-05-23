@@ -30,11 +30,14 @@
 #include "classfile/classLoaderData.hpp"
 #include "classfile/classLoaderData.inline.hpp"
 #include "classfile/classLoadInfo.hpp"
+#include "classfile/javaClasses.hpp"
 #include "classfile/klassFactory.hpp"
 #include "classfile/systemDictionaryShared.hpp"
+#include "cds/runTimeClassInfo.hpp"
 #include "memory/resourceArea.hpp"
 #include "prims/jvmtiEnvBase.hpp"
 #include "prims/jvmtiRedefineClasses.hpp"
+#include "runtime/arguments.hpp"
 #include "runtime/handles.inline.hpp"
 #include "utilities/macros.hpp"
 #if INCLUDE_JFR
@@ -58,7 +61,17 @@ InstanceKlass* KlassFactory::check_shared_class_file_load_hook(
     // Post the CFLH
     JvmtiCachedClassFileData* cached_class_file = nullptr;
     if (cfs == nullptr) {
-      cfs = FileMapInfo::open_stream_for_jvmti(ik, class_loader, CHECK_NULL);
+#if INCLUDE_AGGRESSIVE_CDS
+      if (UseAggressiveCDS && !SystemDictionaryShared::is_builtin(ik)) {
+        cfs = SystemDictionaryShared::get_shared_class_file_stream(ik);
+        if (cfs == nullptr) {
+          cfs = SystemDictionaryShared::get_byte_code_from_cache(class_name, class_loader, CHECK_NULL);
+        }
+      } else
+#endif
+      {
+        cfs = FileMapInfo::open_stream_for_jvmti(ik, class_loader, CHECK_NULL);
+      }
     }
     unsigned char* ptr = (unsigned char*)cfs->buffer();
     unsigned char* end_ptr = ptr + cfs->length();
@@ -69,7 +82,7 @@ InstanceKlass* KlassFactory::check_shared_class_file_load_hook(
                                            &ptr,
                                            &end_ptr,
                                            &cached_class_file);
-    if (old_ptr != ptr) {
+    if (old_ptr != ptr AGGRESSIVE_CDS_ONLY(|| (UseAggressiveCDS && !SystemDictionaryShared::is_builtin(ik)))) {
       // JVMTI agent has modified class file data.
       // Set new class file stream using JVMTI agent modified class file data.
       ClassLoaderData* loader_data =
@@ -80,6 +93,19 @@ InstanceKlass* KlassFactory::check_shared_class_file_load_hook(
                                                     cfs->source(),
                                                     /* from_boot_loader_modules_image */ false,
                                                     /* from_class_file_load_hook */ true);
+#if INCLUDE_AGGRESSIVE_CDS
+      if (UseAggressiveCDS) {
+        const RunTimeClassInfo* record = RunTimeClassInfo::get_for(ik);
+        int stream_size  = stream->length();
+        int stream_crc32 = ClassLoader::crc32(0, (const char*)stream->buffer(), stream->length());
+        if (record->matches(stream_size, stream_crc32)) {
+          if (cached_class_file != nullptr) {
+            ik->set_cached_class_file(cached_class_file);
+          }
+          return nullptr;
+        }
+      }
+#endif
       ClassLoadInfo cl_info(protection_domain);
       ClassFileParser parser(stream,
                              class_name,
@@ -219,6 +245,28 @@ InstanceKlass* KlassFactory::create_from_stream(ClassFileStream* stream,
 #if INCLUDE_CDS
   if (CDSConfig::is_dumping_archive()) {
     ClassLoader::record_result(THREAD, result, stream, old_stream != stream);
+#if INCLUDE_AGGRESSIVE_CDS
+    if (UseAggressiveCDS &&
+        !loader_data->is_builtin_class_loader_data()) {
+      if (JvmtiExport::should_post_class_file_load_hook() && !cl_info.is_hidden()) {
+        SystemDictionaryShared::set_shared_class_file(result, old_stream);
+      }
+      Handle protection_domain = cl_info.protection_domain();
+      if (protection_domain.not_null()) {
+        Handle codesource(THREAD, java_security_ProtectionDomain::codeSource(protection_domain()));
+        if (codesource.not_null()) {
+          Handle str(THREAD, java_security_CodeSource::locationNoFragString(codesource()));
+          if (str.not_null()) {
+            char* string_value = java_lang_String::as_utf8_string(str());
+            if (string_value[0] != '\0') {
+              SystemDictionaryShared::set_url_string(result, string_value);
+              SystemDictionaryShared::save_timestamp(result, string_value);
+            }
+          }
+        }
+      }
+    }
+#endif
   }
 #endif // INCLUDE_CDS
 
