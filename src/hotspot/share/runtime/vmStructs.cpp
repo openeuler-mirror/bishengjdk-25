@@ -443,6 +443,8 @@
   nonstatic_field(Array<ResolvedMethodEntry>,  _data[0],                                      ResolvedMethodEntry)                   \
   nonstatic_field(Array<ResolvedIndyEntry>,    _length,                                       int)                                   \
   nonstatic_field(Array<ResolvedIndyEntry>,    _data[0],                                      ResolvedIndyEntry)                     \
+  nonstatic_field(Array<Array<u1>*>,           _length,                                       int)                                   \
+  nonstatic_field(Array<Array<u1>*>,           _data[0],                                      Array<u1>*)                            \
                                                                                                                                      \
   /*******************/                                                                                                              \
   /* GrowableArrays  */                                                                                                              \
