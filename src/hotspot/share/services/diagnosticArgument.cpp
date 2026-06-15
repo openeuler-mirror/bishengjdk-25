@@ -324,15 +324,28 @@ template <> void DCmdArgument<MemorySizeArgument>::parse_value(const char* str,
   }
   int res = sscanf(str, UINT64_FORMAT "%c", &_value._val, &_value._multiplier);
   if (res == 2) {
+     bool is_valid = true;
      switch (_value._multiplier) {
       case 'k': case 'K':
-         _value._size = _value._val * 1024;
+         if (_value._val <= (UINT64_MAX >> 10)) {
+           _value._size = _value._val * 1024;
+         } else {
+           is_valid = false;
+         }
          break;
       case 'm': case 'M':
-         _value._size = _value._val * 1024 * 1024;
+         if (_value._val <= (UINT64_MAX >> 20)) {
+           _value._size = _value._val * 1024 * 1024;
+         } else {
+           is_valid = false;
+         }
          break;
       case 'g': case 'G':
-         _value._size = _value._val * 1024 * 1024 * 1024;
+         if (_value._val <= (UINT64_MAX >> 30)) {
+           _value._size = _value._val * 1024 * 1024 * 1024;
+         } else {
+           is_valid = false;
+         }
          break;
        default:
          _value._size = _value._val;
@@ -340,6 +353,10 @@ template <> void DCmdArgument<MemorySizeArgument>::parse_value(const char* str,
          //default case should be to break with no error, since user
          //can write size in bytes, or might have a delimiter and next arg
          break;
+     }
+     if (!is_valid) {
+       THROW_MSG(vmSymbols::java_lang_IllegalArgumentException(),
+               "Parsing error memory size value: value is too large\n");
      }
    } else if (res == 1) {
      _value._size = _value._val;

@@ -4128,6 +4128,7 @@ bool MatchRule::is_base_register(FormDict &globals) const {
   if (!base_operand(position, globals, result, name, opType)) {
     position = 0;
     if( base_operand(position, globals, result, name, opType) &&
+        opType != nullptr &&
         (strcmp(opType,"RegI")==0 ||
          strcmp(opType,"RegP")==0 ||
          strcmp(opType,"RegN")==0 ||
