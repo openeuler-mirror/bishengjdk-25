@@ -209,6 +209,18 @@ public class ParserTest {
         parse(name, bi.toString(), name + "=7g", args);
         parse(name, defaultValue, "", args);
 
+        // Test overflow detection for memory size parsing (CWE-190)
+        // UINT64_MAX / 1024 = 18014398509481983, so 18014398509481984k overflows
+        shouldFail(name + "=18014398509481984k", args);
+        shouldFail(name + "=18014398509481984K", args);
+        // UINT64_MAX / (1024*1024) = 17592186044415, so 17592186044416m overflows
+        shouldFail(name + "=17592186044416m", args);
+        shouldFail(name + "=17592186044416M", args);
+        // UINT64_MAX / (1024*1024*1024) = 17179869183, so 17179869184g overflows
+        shouldFail(name + "=17179869184g", args);
+        shouldFail(name + "=17179869184G", args);
+        // MAX uint64 with suffix should also fail
+        shouldFail(name + "=18446744073709551615k", args);
         //shouldFail(name + "=7gg", args); <---- should fail, doesn't
         //shouldFail(name + "=7t", args);  <----- should fail, doesn't
     }
