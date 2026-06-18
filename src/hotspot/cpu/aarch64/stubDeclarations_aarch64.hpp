@@ -44,7 +44,7 @@
                                        do_arch_blob,                    \
                                        do_arch_entry,                   \
                                        do_arch_entry_init)              \
-  do_arch_blob(compiler, 70000)                                         \
+  do_arch_blob(compiler, 80000)                                         \
   do_stub(compiler, vector_iota_indices)                                \
   do_arch_entry(aarch64, compiler, vector_iota_indices,                 \
                 vector_iota_indices, vector_iota_indices)               \
@@ -71,6 +71,22 @@
   do_arch_entry(aarch64, compiler, large_arrays_hashcode_int,           \
                 large_arrays_hashcode_int,                              \
                 large_arrays_hashcode_int)                              \
+  do_stub(compiler, large_arrays_hashcode_sve2_boolean)                 \
+  do_arch_entry(aarch64, compiler, large_arrays_hashcode_sve2_boolean,  \
+                large_arrays_hashcode_sve2_boolean,                     \
+                large_arrays_hashcode_sve2_boolean)                     \
+  do_stub(compiler, large_arrays_hashcode_sve2_byte)                    \
+  do_arch_entry(aarch64, compiler, large_arrays_hashcode_sve2_byte,     \
+                large_arrays_hashcode_sve2_byte,                        \
+                large_arrays_hashcode_sve2_byte)                        \
+  do_stub(compiler, large_arrays_hashcode_sve2_char)                    \
+  do_arch_entry(aarch64, compiler, large_arrays_hashcode_sve2_char,     \
+                large_arrays_hashcode_sve2_char,                        \
+                large_arrays_hashcode_sve2_char)                        \
+  do_stub(compiler, large_arrays_hashcode_sve2_short)                   \
+  do_arch_entry(aarch64, compiler, large_arrays_hashcode_sve2_short,    \
+                large_arrays_hashcode_sve2_short,                       \
+                large_arrays_hashcode_sve2_short)                       \
   do_stub(compiler, large_byte_array_inflate)                           \
   do_arch_entry(aarch64, compiler, large_byte_array_inflate,            \
                 large_byte_array_inflate, large_byte_array_inflate)     \
