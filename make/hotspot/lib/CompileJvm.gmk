@@ -241,13 +241,15 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJVM, \
     PRECOMPILED_HEADER_EXCLUDE := $(JVM_PRECOMPILED_HEADER_EXCLUDE), \
 ))
 
-MEMCPY_OBJECT_FILE := $(JVM_OUTPUTDIR)/objs/memcpy$(OBJ_SUFFIX)
+ifneq ($(STATIC_LIBS), true)
+  MEMCPY_OBJECT_FILE := $(JVM_OUTPUTDIR)/objs/memcpy$(OBJ_SUFFIX)
 
-$(eval $(call SetupCopyFiles, COPY_MEMCPY_OBJECT_FILE, \
-    DEST := $(SUPPORT_OUTPUTDIR)/memcpy, \
-    FILES := $(MEMCPY_OBJECT_FILE), \
-))
-TARGETS += $(COPY_MEMCPY_OBJECT_FILE)
+  $(eval $(call SetupCopyFiles, COPY_MEMCPY_OBJECT_FILE, \
+      DEST := $(SUPPORT_OUTPUTDIR)/memcpy, \
+      FILES := $(MEMCPY_OBJECT_FILE), \
+  ))
+  TARGETS += $(COPY_MEMCPY_OBJECT_FILE)
+endif
 
 ifeq ($(call isTargetOs, windows), true)
   # The following lines create a list of vftable symbols to be filtered out of
@@ -284,14 +286,6 @@ ifeq ($(call isTargetOs, windows), true)
 
   $(BUILD_LIBJVM_TARGET): $(WIN_EXPORT_FILE)
 endif
-
-MEMCPY_OBJECT_FILE := $(JVM_OUTPUTDIR)/objs/memcpy$(OBJ_SUFFIX)
-
-$(eval $(call SetupCopyFiles, COPY_MEMCPY_OBJECT_FILE, \
-          DEST := $(SUPPORT_OUTPUTDIR)/memcpy, \
-          FILES :=$(MEMCPY_OBJECT_FILE), \
-))
-TARGETS += $(COPY_MEMCPY_OBJECT_FILE)
 
 # Always recompile abstract_vm_version.cpp if libjvm needs to be relinked. This ensures
 # that the internal vm version is updated as it relies on __DATE__ and __TIME__
