@@ -153,6 +153,9 @@
   do_stub(final, zero_blocks)                                           \
   do_arch_entry(aarch64, final, zero_blocks, zero_blocks,               \
                 zero_blocks)                                            \
+  do_stub(final, zero_blocks_sve)                                       \
+  do_arch_entry(aarch64, final, zero_blocks_sve, zero_blocks_sve,       \
+                zero_blocks_sve)                                        \
   do_stub(final, spin_wait)                                             \
   do_arch_entry_init(aarch64, final, spin_wait, spin_wait,              \
                      spin_wait, empty_spin_wait)                        \
