@@ -46,6 +46,7 @@ public class JBoltVMOptionsTest {
     test2();
     test3();
     test4();
+    test5();
   }
 
   private static void clearTmpFile() {
@@ -286,6 +287,34 @@ public class JBoltVMOptionsTest {
       throw new RuntimeException(stdout);
     }
 
+    clearTmpFile();
+  }
+
+  private static void test5() throws Exception {
+    ProcessBuilder pb1 = ProcessTools.createLimitedTestJavaProcessBuilder(
+      "-XX:+UnlockExperimentalVMOptions",
+      "-XX:+UseJBolt",
+      "-XX:+JBoltLoadMode",
+      "-XX:JBoltOrderFile=" + SRC_DIR + "/o4.log",
+      "-XX:JBoltCodeHeapSize=0",
+      "--version"
+    );
+
+    OutputAnalyzer out1 = new OutputAnalyzer(pb1.start());
+    out1.shouldNotHaveExitValue(0);
+    out1.shouldContain("Not enough space in jbolt code heap to run VM");
+
+    ProcessBuilder pb2 = ProcessTools.createLimitedTestJavaProcessBuilder(
+      "-XX:+UnlockExperimentalVMOptions",
+      "-XX:+UseJBolt",
+      "-XX:+JBoltDumpMode",
+      "-XX:JBoltOrderFile=" + TEMP_FILE,
+      "-XX:JBoltCodeHeapSize=0",
+      "--version"
+    );
+
+    OutputAnalyzer out2 = new OutputAnalyzer(pb2.start());
+    out2.shouldHaveExitValue(0);
     clearTmpFile();
   }
 }

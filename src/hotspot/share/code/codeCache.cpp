@@ -321,6 +321,11 @@ void CodeCache::initialize_heaps() {
   if (non_profiled.enabled) { // non_profiled.enabled is always ON for segmented code heap, leave it checked for clarity
     check_min_size("non-profiled code heap", non_profiled.size, min_size);
   }
+#if INCLUDE_JBOLT
+  if (UseJBolt && !JBoltDumpMode) {
+    check_min_size("jbolt code heap", JBoltCodeHeapSize, min_size);
+  }
+#endif // INCLUDE_JBOLT
 
   // ReservedCodeCacheSize was set explicitly, so report an error and abort if it doesn't match the segment sizes
   if (aligned_total != cache_size && cache_size_set) {
