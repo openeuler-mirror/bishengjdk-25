@@ -1095,6 +1095,26 @@ bool VectorNode::should_swap_inputs_to_help_global_value_numbering() {
     return false;
   }
 
+#ifdef AARCH64
+  switch (Opcode()) {
+    case Op_MulVB:
+    case Op_MulVS:
+    case Op_MulVI:
+      if (UseSVE > 0 && length_in_bytes() > 16) {
+        const bool in1_is_replicate = in(1)->Opcode() == Op_Replicate;
+        const bool in2_is_replicate = in(2)->Opcode() == Op_Replicate;
+        if (in1_is_replicate != in2_is_replicate) {
+          // SVE integer multiply is destructive on its first source. Prefer
+          // keeping the data vector there so broadcast constants stay reusable.
+          return in1_is_replicate;
+        }
+      }
+      break;
+    default:
+      break;
+  }
+#endif
+
   switch(Opcode()) {
     case Op_AddVB:
     case Op_AddVS:
