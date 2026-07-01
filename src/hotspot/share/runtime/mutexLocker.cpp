@@ -69,13 +69,7 @@ Monitor* ThreadsLockThrottle_lock     = nullptr;
 Monitor* Threads_lock                 = nullptr;
 Mutex*   NonJavaThreadsList_lock      = nullptr;
 Mutex*   NonJavaThreadsListSync_lock  = nullptr;
-Monitor* CGC_lock                     = nullptr;
 Monitor* STS_lock                     = nullptr;
-Monitor* G1OldGCCount_lock            = nullptr;
-Mutex*   G1RareEvent_lock             = nullptr;
-Mutex*   G1DetachedRefinementStats_lock = nullptr;
-Mutex*   MarkStackFreeList_lock       = nullptr;
-Mutex*   MarkStackChunkList_lock      = nullptr;
 Mutex*   MonitoringSupport_lock       = nullptr;
 Monitor* ConcurrentGCBreakpoints_lock = nullptr;
 Mutex*   Compile_lock                 = nullptr;
@@ -103,10 +97,31 @@ Mutex*   RawMonitor_lock              = nullptr;
 Mutex*   PerfDataMemAlloc_lock        = nullptr;
 Mutex*   PerfDataManager_lock         = nullptr;
 
+#ifdef AARCH64
+#if INCLUDE_G1GC
+Monitor* G1CGC_lock                   = nullptr;
+Mutex*   G1FreeList_lock              = nullptr;
+Mutex*   G1MarkStackChunkList_lock    = nullptr;
+Mutex*   G1MarkStackFreeList_lock     = nullptr;
+Monitor* G1OldGCCount_lock            = nullptr;
+Mutex*   G1OldSets_lock               = nullptr;
+Mutex*   G1ReviseYoungLength_lock     = nullptr;
+Monitor* G1RootRegionScan_lock        = nullptr;
+Mutex*   G1RareEvent_lock             = nullptr;
+Mutex*   G1Uncommit_lock              = nullptr;
+#endif
+#else // AARCH64
+Monitor* CGC_lock                     = nullptr;
+Monitor* G1OldGCCount_lock            = nullptr;
+Mutex*   G1RareEvent_lock             = nullptr;
+Mutex*   G1DetachedRefinementStats_lock = nullptr;
+Mutex*   MarkStackFreeList_lock       = nullptr;
+Mutex*   MarkStackChunkList_lock      = nullptr;
 Mutex*   FreeList_lock                = nullptr;
 Mutex*   OldSets_lock                 = nullptr;
 Mutex*   Uncommit_lock                = nullptr;
 Monitor* RootRegionScan_lock          = nullptr;
+#endif // AARCH64
 
 Mutex*   Management_lock              = nullptr;
 Monitor* MonitorDeflation_lock        = nullptr;
@@ -207,19 +222,31 @@ void mutex_init() {
 
   MUTEX_DEFN(STS_lock                        , PaddedMonitor, nosafepoint);
 
+#ifdef AARCH64
+#if INCLUDE_G1GC
+  if (UseG1GC) {
+    MUTEX_DEFN(G1CGC_lock                    , PaddedMonitor, nosafepoint);
+    MUTEX_DEFN(G1FreeList_lock               , PaddedMutex  , service-1);
+    MUTEX_DEFN(G1MarkStackChunkList_lock     , PaddedMutex  , nosafepoint);
+    MUTEX_DEFN(G1MarkStackFreeList_lock      , PaddedMutex  , nosafepoint);
+    MUTEX_DEFN(G1OldSets_lock                , PaddedMutex  , nosafepoint);
+    MUTEX_DEFN(G1RootRegionScan_lock         , PaddedMonitor, nosafepoint-1);
+    MUTEX_DEFN(G1Uncommit_lock               , PaddedMutex  , service-2);
+  }
+#endif
+#else // AARCH64
   if (UseG1GC) {
     MUTEX_DEFN(CGC_lock                      , PaddedMonitor, nosafepoint);
-
     MUTEX_DEFN(G1DetachedRefinementStats_lock, PaddedMutex  , nosafepoint-2);
-
     MUTEX_DEFN(FreeList_lock                 , PaddedMutex  , service-1);
     MUTEX_DEFN(OldSets_lock                  , PaddedMutex  , nosafepoint);
     MUTEX_DEFN(Uncommit_lock                 , PaddedMutex  , service-2);
     MUTEX_DEFN(RootRegionScan_lock           , PaddedMonitor, nosafepoint-1);
-
     MUTEX_DEFN(MarkStackFreeList_lock        , PaddedMutex  , nosafepoint);
     MUTEX_DEFN(MarkStackChunkList_lock       , PaddedMutex  , nosafepoint);
   }
+#endif // AARCH64
+
   MUTEX_DEFN(MonitoringSupport_lock          , PaddedMutex  , service-1);        // used for serviceability monitoring support
 
   MUTEX_DEFN(StringDedup_lock                , PaddedMonitor, nosafepoint);
@@ -338,10 +365,20 @@ void mutex_init() {
   MUTEX_DEFL(VMOperation_lock               , PaddedMonitor, Heap_lock, true);
   MUTEX_DEFL(ClassInitError_lock            , PaddedMonitor, Threads_lock);
 
+#ifdef AARCH64
+#if INCLUDE_G1GC
+  if (UseG1GC) {
+    MUTEX_DEFL(G1OldGCCount_lock            , PaddedMonitor, Threads_lock, true);
+    MUTEX_DEFL(G1RareEvent_lock             , PaddedMutex  , Threads_lock, true);
+    MUTEX_DEFL(G1ReviseYoungLength_lock     , PaddedMutex  , Threads_lock, true);
+  }
+#endif
+#else // AARCH64
   if (UseG1GC) {
     MUTEX_DEFL(G1OldGCCount_lock            , PaddedMonitor, Threads_lock, true);
     MUTEX_DEFL(G1RareEvent_lock             , PaddedMutex  , Threads_lock, true);
   }
+#endif // AARCH64
 
   MUTEX_DEFL(CompileTaskAlloc_lock          , PaddedMonitor, MethodCompileQueue_lock);
   MUTEX_DEFL(CompileTaskWait_lock           , PaddedMonitor, MethodCompileQueue_lock);

@@ -36,7 +36,20 @@
 #include "runtime/orderAccess.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
+#ifndef AARCH64
 #include "utilities/quickSort.hpp"
+#endif // !AARCH64
+
+#ifdef AARCH64
+uint G1CollectionSet::groups_cur_length() const {
+  assert(_inc_build_state == CSetBuildType::Inactive, "must be");
+  return _groups.length();
+}
+
+uint G1CollectionSet::groups_increment_length() const {
+  return groups_cur_length() - _groups_inc_part_start;
+}
+#endif // AARCH64
 
 G1CollectorState* G1CollectionSet::collector_state() const {
   return _g1h->collector_state();
@@ -50,22 +63,39 @@ G1CollectionSet::G1CollectionSet(G1CollectedHeap* g1h, G1Policy* policy) :
   _g1h(g1h),
   _policy(policy),
   _candidates(),
+#ifdef AARCH64
+  _regions(nullptr),
+  _regions_max_length(0),
+  _regions_cur_length(0),
+  _groups(),
+#else // AARCH64
   _collection_set_regions(nullptr),
   _collection_set_cur_length(0),
   _collection_set_max_length(0),
   _collection_set_groups(),
   _selected_groups_cur_length(0),
   _selected_groups_inc_part_start(0),
+#endif // AARCH64
   _eden_region_length(0),
   _survivor_region_length(0),
   _initial_old_region_length(0),
   _optional_groups(),
+#ifdef AARCH64
+  DEBUG_ONLY(_inc_build_state(CSetBuildType::Inactive) COMMA)
+  _regions_inc_part_start(0),
+  _groups_inc_part_start(0) {
+#else // AARCH64
   _inc_build_state(Inactive),
   _inc_part_start(0) {
+#endif // AARCH64
 }
 
 G1CollectionSet::~G1CollectionSet() {
+#ifdef AARCH64
+  FREE_C_HEAP_ARRAY(uint, _regions);
+#else // AARCH64
   FREE_C_HEAP_ARRAY(uint, _collection_set_regions);
+#endif // AARCH64
   abandon_all_candidates();
 }
 
@@ -76,8 +106,13 @@ void G1CollectionSet::init_region_lengths(uint eden_cset_region_length,
   _eden_region_length     = eden_cset_region_length;
   _survivor_region_length = survivor_cset_region_length;
 
+#ifdef AARCH64
+  assert((size_t)young_region_length() == _regions_cur_length,
+         "Young region length %u should match collection set length %u", young_region_length(), _regions_cur_length);
+#else // AARCH64
   assert((size_t)young_region_length() == _collection_set_cur_length,
          "Young region length %u should match collection set length %u", young_region_length(), _collection_set_cur_length);
+#endif // AARCH64
 
   _initial_old_region_length = 0;
   assert(_optional_groups.length() == 0, "Should not have any optional groups yet");
@@ -85,9 +120,15 @@ void G1CollectionSet::init_region_lengths(uint eden_cset_region_length,
 }
 
 void G1CollectionSet::initialize(uint max_region_length) {
+#ifdef AARCH64
+  guarantee(_regions == nullptr, "Must only initialize once.");
+  _regions_max_length = max_region_length;
+  _regions = NEW_C_HEAP_ARRAY(uint, max_region_length, mtGC);
+#else // AARCH64
   guarantee(_collection_set_regions == nullptr, "Must only initialize once.");
   _collection_set_max_length = max_region_length;
   _collection_set_regions = NEW_C_HEAP_ARRAY(uint, max_region_length, mtGC);
+#endif // AARCH64
 
   _candidates.initialize(max_region_length);
 }
@@ -97,53 +138,108 @@ void G1CollectionSet::abandon_all_candidates() {
   _initial_old_region_length = 0;
 }
 
+#ifdef AARCH64
+void G1CollectionSet::prepare_for_scan () {
+  _groups.prepare_for_scan();
+#else // AARCH64
 void G1CollectionSet::prepare_groups_for_scan () {
   collection_set_groups()->prepare_for_scan();
+#endif // AARCH64
 }
 
 void G1CollectionSet::add_old_region(G1HeapRegion* hr) {
   assert_at_safepoint_on_vm_thread();
 
+#ifdef AARCH64
+  assert(_inc_build_state == CSetBuildType::Active,
+#else // AARCH64
   assert(_inc_build_state == Active,
+#endif // AARCH64
          "Precondition, actively building cset or adding optional later on");
   assert(hr->is_old(), "the region should be old");
 
+#ifdef AARCH64
+  assert(!hr->rem_set()->has_cset_group(), "Should have already uninstalled group remset");
+#else // AARCH64
   assert(!hr->rem_set()->is_added_to_cset_group(), "Should have already uninstalled group remset");
+#endif // AARCH64
 
   assert(!hr->in_collection_set(), "should not already be in the collection set");
   _g1h->register_old_region_with_region_attr(hr);
 
+#ifdef AARCH64
+  assert(_regions_cur_length < _regions_max_length, "Collection set now larger than maximum size.");
+  _regions[_regions_cur_length++] = hr->hrm_index();
+#else // AARCH64
   assert(_collection_set_cur_length < _collection_set_max_length, "Collection set now larger than maximum size.");
   _collection_set_regions[_collection_set_cur_length++] = hr->hrm_index();
+#endif // AARCH64
   _initial_old_region_length++;
 
   _g1h->old_set_remove(hr);
 }
 
 void G1CollectionSet::start_incremental_building() {
+#ifdef AARCH64
+  assert(_regions_cur_length == 0, "Collection set must be empty before starting a new collection set.");
+  assert(groups_cur_length() == 0, "Collection set groups must be empty before starting a new collection set.");
+  assert(_optional_groups.length() == 0, "Collection set optional gorups must be empty before starting a new collection set.");
+#else // AARCH64
   assert(_collection_set_cur_length == 0, "Collection set must be empty before starting a new collection set.");
   assert(_inc_build_state == Inactive, "Precondition");
+#endif // AARCH64
 
+#ifdef AARCH64
+  continue_incremental_building();
+#else // AARCH64
   update_incremental_marker();
+#endif // AARCH64
 }
 
+#ifdef AARCH64
+void G1CollectionSet::continue_incremental_building() {
+  assert(_inc_build_state == CSetBuildType::Inactive, "Precondition");
+
+  _regions_inc_part_start = _regions_cur_length;
+  _groups_inc_part_start = groups_cur_length();
+
+  DEBUG_ONLY(_inc_build_state = CSetBuildType::Active;)
+}
+
+void G1CollectionSet::stop_incremental_building() {
+  DEBUG_ONLY(_inc_build_state = CSetBuildType::Inactive;)
+#else // AARCH64
 void G1CollectionSet::finalize_incremental_building() {
   assert(_inc_build_state == Active, "Precondition");
   assert(SafepointSynchronize::is_at_safepoint(), "should be at a safepoint");
+#endif // AARCH64
 }
 
 void G1CollectionSet::clear() {
   assert_at_safepoint_on_vm_thread();
+#ifdef AARCH64
+  _regions_cur_length = 0;
+  _groups.clear();
+#else // AARCH64
   _collection_set_cur_length = 0;
   _collection_set_groups.clear();
+#endif // AARCH64
 }
 
 void G1CollectionSet::iterate(G1HeapRegionClosure* cl) const {
+#ifdef AARCH64
+  size_t len = _regions_cur_length;
+#else // AARCH64
   size_t len = _collection_set_cur_length;
+#endif // AARCH64
   OrderAccess::loadload();
 
   for (uint i = 0; i < len; i++) {
+#ifdef AARCH64
+    G1HeapRegion* r = _g1h->region_at(_regions[i]);
+#else // AARCH64
     G1HeapRegion* r = _g1h->region_at(_collection_set_regions[i]);
+#endif // AARCH64
     bool result = cl->do_heap_region(r);
     if (result) {
       cl->set_incomplete();
@@ -170,7 +266,11 @@ void G1CollectionSet::iterate_optional(G1HeapRegionClosure* cl) const {
 void G1CollectionSet::iterate_incremental_part_from(G1HeapRegionClosure* cl,
                                                     G1HeapRegionClaimer* hr_claimer,
                                                     uint worker_id) const {
+#ifdef AARCH64
+  iterate_part_from(cl, hr_claimer, _regions_inc_part_start, regions_cur_length(), worker_id);
+#else // AARCH64
   iterate_part_from(cl, hr_claimer, _inc_part_start, increment_length(), worker_id);
+#endif // AARCH64
 }
 
 void G1CollectionSet::iterate_part_from(G1HeapRegionClosure* cl,
@@ -180,29 +280,52 @@ void G1CollectionSet::iterate_part_from(G1HeapRegionClosure* cl,
                                         uint worker_id) const {
   _g1h->par_iterate_regions_array(cl,
                                   hr_claimer,
+#ifdef AARCH64
+                                  &_regions[offset],
+#else // AARCH64
                                   &_collection_set_regions[offset],
+#endif // AARCH64
                                   length,
                                   worker_id);
 }
 
 void G1CollectionSet::add_young_region_common(G1HeapRegion* hr) {
   assert(hr->is_young(), "invariant");
+#ifdef AARCH64
+  assert(_inc_build_state == CSetBuildType::Active, "Precondition");
+#else // AARCH64
   assert(_inc_build_state == Active, "Precondition");
+#endif // AARCH64
 
   assert(!hr->in_collection_set(), "invariant");
   _g1h->register_young_region_with_region_attr(hr);
 
   // We use UINT_MAX as "invalid" marker in verification.
+#ifdef AARCH64
+  assert(_regions_cur_length < (UINT_MAX - 1),
+         "Collection set is too large with %u entries", _regions_cur_length);
+  hr->set_young_index_in_cset(_regions_cur_length + 1);
+#else // AARCH64
   assert(_collection_set_cur_length < (UINT_MAX - 1),
          "Collection set is too large with %u entries", _collection_set_cur_length);
   hr->set_young_index_in_cset(_collection_set_cur_length + 1);
+#endif // AARCH64
 
+#ifdef AARCH64
+  assert(_regions_cur_length < _regions_max_length, "Collection set larger than maximum allowed.");
+  _regions[_regions_cur_length] = hr->hrm_index();
+#else // AARCH64
   assert(_collection_set_cur_length < _collection_set_max_length, "Collection set larger than maximum allowed.");
   _collection_set_regions[_collection_set_cur_length] = hr->hrm_index();
+#endif // AARCH64
   // Concurrent readers must observe the store of the value in the array before an
   // update to the length field.
   OrderAccess::storestore();
+#ifdef AARCH64
+  _regions_cur_length++;
+#else // AARCH64
   _collection_set_cur_length++;
+#endif // AARCH64
 }
 
 void G1CollectionSet::add_survivor_regions(G1HeapRegion* hr) {
@@ -284,14 +407,25 @@ void G1CollectionSet::print(outputStream* st) {
 // pinned by JNI) to allow faster future evacuation. We already "paid" for this work
 // when sizing the young generation.
 double G1CollectionSet::finalize_young_part(double target_pause_time_ms, G1SurvivorRegions* survivors) {
+#ifdef AARCH64
+  assert(_inc_build_state == CSetBuildType::Active, "Precondition");
+  assert(SafepointSynchronize::is_at_safepoint(), "should be at a safepoint");
+#endif // AARCH64
   Ticks start_time = Ticks::now();
 
+#ifndef AARCH64
   finalize_incremental_building();
+#endif // !AARCH64
 
   guarantee(target_pause_time_ms > 0.0,
             "target_pause_time_ms = %1.6lf should be positive", target_pause_time_ms);
 
+#ifdef AARCH64
+  bool in_young_only_phase = _policy->collector_state()->in_young_only_phase();
+  size_t pending_cards = _policy->analytics()->predict_pending_cards(in_young_only_phase);
+#else // AARCH64
   size_t pending_cards = _policy->pending_cards_at_gc_start();
+#endif // AARCH64
 
   log_trace(gc, ergo, cset)("Start choosing CSet. Pending cards: %zu target pause time: %1.2fms",
                             pending_cards, target_pause_time_ms);
@@ -306,7 +440,12 @@ double G1CollectionSet::finalize_young_part(double target_pause_time_ms, G1Survi
 
   verify_young_cset_indices();
 
+#ifdef AARCH64
+  size_t card_rs_length = _policy->analytics()->predict_card_rs_length(in_young_only_phase);
+  double predicted_base_time_ms = _policy->predict_base_time_ms(pending_cards, card_rs_length);
+#else // AARCH64
   double predicted_base_time_ms = _policy->predict_base_time_ms(pending_cards, _g1h->young_regions_cardset()->occupied());
+#endif // AARCH64
   // Base time already includes the whole remembered set related time, so do not add that here
   // again.
   double predicted_eden_time = _policy->predict_young_region_other_time_ms(eden_region_length) +
@@ -326,9 +465,11 @@ double G1CollectionSet::finalize_young_part(double target_pause_time_ms, G1Survi
   return remaining_time_ms;
 }
 
+#ifndef AARCH64
 static int compare_region_idx(const uint a, const uint b) {
   return static_cast<int>(a-b);
 }
+#endif // !AARCH64
 
 // The current mechanism for evacuating pinned old regions is as below:
 // * pinned regions in the marking collection set candidate list (available during mixed gc) are evacuated like
@@ -343,8 +484,10 @@ static int compare_region_idx(const uint a, const uint b) {
 void G1CollectionSet::finalize_old_part(double time_remaining_ms) {
   double non_young_start_time_sec = os::elapsedTime();
 
+#ifndef AARCH64
   _selected_groups_cur_length = 0;
   _selected_groups_inc_part_start = 0;
+#endif // !AARCH64
 
   if (!candidates()->is_empty()) {
     candidates()->verify();
@@ -363,19 +506,34 @@ void G1CollectionSet::finalize_old_part(double time_remaining_ms) {
     log_debug(gc, ergo, cset)("No candidates to reclaim.");
   }
 
+#ifndef AARCH64
   _selected_groups_cur_length = collection_set_groups()->length();
   stop_incremental_building();
-
+#endif // !AARCH64
   double non_young_end_time_sec = os::elapsedTime();
   phase_times()->record_non_young_cset_choice_time_ms((non_young_end_time_sec - non_young_start_time_sec) * 1000.0);
 
+#ifndef AARCH64
   QuickSort::sort(_collection_set_regions, _collection_set_cur_length, compare_region_idx);
+#endif // !AARCH64
 }
 
 static void print_finish_message(const char* reason, bool from_marking) {
   log_debug(gc, ergo, cset)("Finish adding %s candidates to collection set (%s).",
                             from_marking ? "marking" : "retained", reason);
 }
+
+#ifdef AARCH64
+void G1CollectionSet::add_optional_group(G1CSetCandidateGroup* group,
+                                         uint& num_optional_regions,
+                                         double& predicted_optional_time_ms,
+                                         double predicted_time_ms) {
+  _optional_groups.append(group);
+  prepare_optional_group(group, num_optional_regions);
+  num_optional_regions += group->length();
+  predicted_optional_time_ms += predicted_time_ms;
+}
+#endif // AARCH64
 
 double G1CollectionSet::select_candidates_from_marking(double time_remaining_ms) {
   uint num_expensive_regions = 0;
@@ -396,6 +554,9 @@ double G1CollectionSet::select_candidates_from_marking(double time_remaining_ms)
 
   G1CSetCandidateGroupList* from_marking_groups = &candidates()->from_marking_groups();
 
+#ifdef AARCH64
+  bool make_first_group_optional = G1ForceOptionalEvacuation;
+#endif // AARCH64
   log_debug(gc, ergo, cset)("Start adding marking candidates to collection set. "
                             "Min %u regions, max %u regions, available %u regions (%u groups), "
                             "time remaining %1.2fms, optional threshold %1.2fms",
@@ -412,6 +573,17 @@ double G1CollectionSet::select_candidates_from_marking(double time_remaining_ms)
     }
 
     double predicted_time_ms = group->predict_group_total_time_ms();
+
+#ifdef AARCH64
+    if (make_first_group_optional) {
+        make_first_group_optional = false;
+        add_optional_group(group,
+                           num_optional_regions,
+                           predicted_optional_time_ms,
+                           predicted_time_ms);
+        continue;
+    }
+#endif // AARCH64
 
     time_remaining_ms = MAX2(time_remaining_ms - predicted_time_ms, 0.0);
     // Add regions to old set until we reach the minimum amount
@@ -448,10 +620,17 @@ double G1CollectionSet::select_candidates_from_marking(double time_remaining_ms)
 
       } else if (time_remaining_ms > 0) {
         // Keep adding optional regions until time is up.
+#ifdef AARCH64
+        add_optional_group(group,
+                           num_optional_regions,
+                           predicted_optional_time_ms,
+                           predicted_time_ms);
+#else // AARCH64
         _optional_groups.append(group);
         prepare_optional_group(group, num_optional_regions);
         num_optional_regions += group->length();
         predicted_optional_time_ms += predicted_time_ms;
+#endif // AARCH64
       } else {
         print_finish_message("Predicted time too high", true);
         break;
@@ -552,10 +731,17 @@ void G1CollectionSet::select_candidates_from_retained(double time_remaining_ms) 
       num_initial_regions += group->length();
     } else if (predicted_time_ms <= optional_time_remaining_ms) {
       // Prepare optional collection region.
+#ifdef AARCH64
+      add_optional_group(group,
+                         num_optional_regions,
+                         predicted_optional_time_ms,
+                         predicted_time_ms);
+#else // AARCH64
       _optional_groups.append(group);
       prepare_optional_group(group, num_optional_regions);
       num_optional_regions += group->length();
       predicted_optional_time_ms += predicted_time_ms;
+#endif // AARCH64
     } else {
       // Fits neither initial nor optional time limit. Exit.
       break;
@@ -594,7 +780,9 @@ double G1CollectionSet::select_candidates_from_optional_groups(double time_remai
   assert(_optional_groups.num_regions() > 0,
          "Should only be called when there are optional regions");
 
+#ifndef AARCH64
   uint num_groups_selected = 0;
+#endif // !AARCH64
   double total_prediction_ms = 0.0;
   G1CSetCandidateGroupList selected;
   for (G1CSetCandidateGroup* group : _optional_groups) {
@@ -610,22 +798,37 @@ double G1CollectionSet::select_candidates_from_optional_groups(double time_remai
     time_remaining_ms -= predicted_time_ms;
 
     num_regions_selected += group->length();
+#ifndef AARCH64
     num_groups_selected++;
+#endif // !AARCH64
 
     add_group_to_collection_set(group);
     selected.append(group);
   }
 
+#ifdef AARCH64
+  log_debug(gc, ergo, cset)("Completed with groups, selected %u region in %u groups",
+                            num_regions_selected, selected.length());
+#else // AARCH64
   log_debug(gc, ergo, cset) ("Completed with groups, selected %u", num_regions_selected);
+#endif // AARCH64
   // Remove selected groups from candidate list.
+#ifdef AARCH64
+  if (selected.length() > 0) {
+#else // AARCH64
   if (num_groups_selected > 0) {
+#endif // AARCH64
     _optional_groups.remove(&selected);
     candidates()->remove(&selected);
   }
   return total_prediction_ms;
 }
 
+#ifdef AARCH64
+uint G1CollectionSet::select_optional_groups(double time_remaining_ms) {
+#else // AARCH64
 uint G1CollectionSet::select_optional_collection_set_regions(double time_remaining_ms) {
+#endif // AARCH64
   uint optional_regions_count = num_optional_regions();
   assert(optional_regions_count > 0,
          "Should only be called when there are optional regions");
@@ -634,10 +837,12 @@ uint G1CollectionSet::select_optional_collection_set_regions(double time_remaini
 
   double total_prediction_ms = select_candidates_from_optional_groups(time_remaining_ms, num_regions_selected);
 
+#ifndef AARCH64
   time_remaining_ms -= total_prediction_ms;
-
+#endif // !AARCH64
   log_debug(gc, ergo, cset)("Prepared %u regions out of %u for optional evacuation. Total predicted time: %.3fms",
                             num_regions_selected, optional_regions_count, total_prediction_ms);
+
   return num_regions_selected;
 }
 
@@ -660,7 +865,11 @@ void G1CollectionSet::add_group_to_collection_set(G1CSetCandidateGroup* gr) {
     assert(r->rem_set()->is_complete(), "must be");
     add_region_to_collection_set(r);
   }
+#ifdef AARCH64
+  _groups.append(gr);
+#else // AARCH64
   _collection_set_groups.append(gr);
+#endif // AARCH64
 }
 
 void G1CollectionSet::add_region_to_collection_set(G1HeapRegion* r) {
@@ -670,16 +879,34 @@ void G1CollectionSet::add_region_to_collection_set(G1HeapRegion* r) {
 }
 
 void G1CollectionSet::finalize_initial_collection_set(double target_pause_time_ms, G1SurvivorRegions* survivor) {
+#ifdef AARCH64
+  assert(_regions_inc_part_start == 0, "must be");
+  assert(_groups_inc_part_start == 0, "must be");
+#endif // AARCH64
   double time_remaining_ms = finalize_young_part(target_pause_time_ms, survivor);
   finalize_old_part(time_remaining_ms);
+
+#ifdef AARCH64
+  stop_incremental_building();
+#endif // AARCH64
 }
 
 bool G1CollectionSet::finalize_optional_for_evacuation(double remaining_pause_time) {
+#ifdef AARCH64
+  continue_incremental_building();
+#else // AARCH64
   update_incremental_marker();
+#endif // AARCH64
 
+#ifdef AARCH64
+  uint num_regions_selected = select_optional_groups(remaining_pause_time);
+#else // AARCH64
   uint num_regions_selected = select_optional_collection_set_regions(remaining_pause_time);
+#endif // AARCH64
 
+#ifndef AARCH64
   _selected_groups_cur_length = collection_set_groups()->length();
+#endif // !AARCH64
   stop_incremental_building();
 
   _g1h->verify_region_attr_remset_is_tracked();
@@ -741,7 +968,11 @@ public:
 void G1CollectionSet::verify_young_cset_indices() const {
   assert_at_safepoint_on_vm_thread();
 
+#ifdef AARCH64
+  G1VerifyYoungCSetIndicesClosure cl(_regions_cur_length);
+#else // AARCH64
   G1VerifyYoungCSetIndicesClosure cl(_collection_set_cur_length);
+#endif // AARCH64
   iterate(&cl);
 }
 #endif

@@ -99,7 +99,7 @@ static void scavenge_roots_work(ParallelRootType::Value root_type, uint worker_i
 
     case ParallelRootType::code_cache:
       {
-        MarkingNMethodClosure code_closure(&roots_to_old_closure, NMethodToOopClosure::FixRelocations, false /* keepalive nmethods */);
+        NMethodToOopClosure code_closure(&roots_to_old_closure, NMethodToOopClosure::FixRelocations);
         ScavengableNMethods::nmethods_do(&code_closure);
       }
       break;
@@ -229,9 +229,9 @@ public:
 
     PSPromotionManager* pm = PSPromotionManager::gc_thread_promotion_manager(_worker_id);
     PSScavengeRootsClosure roots_closure(pm);
-    MarkingNMethodClosure roots_in_nmethods(&roots_closure, NMethodToOopClosure::FixRelocations, false /* keepalive nmethods */);
 
-    thread->oops_do(&roots_closure, &roots_in_nmethods);
+    // No need to visit nmethods, because they are handled by ScavengableNMethods.
+    thread->oops_do(&roots_closure, nullptr);
 
     // Do the real work
     pm->drain_stacks(false);
@@ -239,7 +239,7 @@ public:
 };
 
 class ScavengeRootsTask : public WorkerTask {
-  StrongRootsScope _strong_roots_scope; // needed for Threads::possibly_parallel_threads_do
+  ThreadsClaimTokenScope _threads_claim_token_scope; // needed for Threads::possibly_parallel_threads_do
   OopStorageSetStrongParState<false /* concurrent */, false /* is_const */> _oop_storage_strong_par_state;
   SequentialSubTasksDone _subtasks;
   PSOldGen* _old_gen;
@@ -252,7 +252,7 @@ public:
   ScavengeRootsTask(PSOldGen* old_gen,
                     uint active_workers) :
     WorkerTask("ScavengeRootsTask"),
-    _strong_roots_scope(active_workers),
+    _threads_claim_token_scope(),
     _subtasks(ParallelRootType::sentinel),
     _old_gen(old_gen),
     _gen_top(old_gen->object_space()->top()),

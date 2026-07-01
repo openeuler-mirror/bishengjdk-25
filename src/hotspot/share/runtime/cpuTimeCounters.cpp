@@ -36,6 +36,10 @@ const char* CPUTimeGroups::to_string(CPUTimeType val) {
       return "gc_conc_mark";
     case CPUTimeType::gc_conc_refine:
       return "gc_conc_refine";
+#ifdef AARCH64
+    case CPUTimeType::gc_conc_refine_control:
+      return "gc_conc_refine_control";
+#endif // AARCH64
     case CPUTimeType::gc_service:
       return "gc_service";
     case CPUTimeType::vm:
@@ -53,6 +57,9 @@ bool CPUTimeGroups::is_gc_counter(CPUTimeType val) {
     case CPUTimeType::gc_parallel_workers:
     case CPUTimeType::gc_conc_mark:
     case CPUTimeType::gc_conc_refine:
+#ifdef AARCH64
+    case CPUTimeType::gc_conc_refine_control:
+#endif // AARCH64
     case CPUTimeType::gc_service:
       return true;
     default:

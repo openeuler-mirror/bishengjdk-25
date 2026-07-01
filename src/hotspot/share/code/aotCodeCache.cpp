@@ -1330,7 +1330,9 @@ void AOTCodeAddressTable::init_extrs() {
 #endif // COMPILER2
 
 #if INCLUDE_G1GC
+#ifndef AARCH64
   SET_ADDRESS(_extrs, G1BarrierSetRuntime::write_ref_field_post_entry);
+#endif // !AARCH64
   SET_ADDRESS(_extrs, G1BarrierSetRuntime::write_ref_field_pre_entry);
 #endif
 #if INCLUDE_SHENANDOAHGC

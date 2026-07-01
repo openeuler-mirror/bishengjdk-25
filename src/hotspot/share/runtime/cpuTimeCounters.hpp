@@ -40,6 +40,9 @@ public:
     gc_parallel_workers,
     gc_conc_mark,
     gc_conc_refine,
+#ifdef AARCH64
+    gc_conc_refine_control,
+#endif // AARCH64
     gc_service,
     vm,
     conc_dedup,

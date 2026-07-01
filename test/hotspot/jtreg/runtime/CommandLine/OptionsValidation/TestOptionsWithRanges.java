@@ -150,6 +150,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import jdk.test.lib.Asserts;
+import jdk.test.lib.Platform;
 import optionsvalidation.JVMOption;
 import optionsvalidation.JVMOptionsUtils;
 
@@ -235,7 +236,9 @@ public class TestOptionsWithRanges {
          */
         excludeTestMaxRange("ConcGCThreads");
         excludeTestMaxRange("G1ConcRefinementThreads");
-        excludeTestMaxRange("G1UpdateBufferSize");
+        if (!Platform.isAArch64()) {
+            excludeTestMaxRange("G1UpdateBufferSize");
+        }
         excludeTestMaxRange("InitialHeapSize");
         excludeTestMaxRange("MaxHeapSize");
         excludeTestMaxRange("MaxRAM");

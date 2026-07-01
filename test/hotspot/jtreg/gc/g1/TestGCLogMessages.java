@@ -90,6 +90,26 @@ public class TestGCLogMessages {
         }
     }
 
+    private class LogMessageWithLevelAArch64Only extends LogMessageWithLevel {
+        public LogMessageWithLevelAArch64Only(String message, Level level) {
+            super(message, level);
+        }
+
+        public boolean isAvailable() {
+            return Platform.isAArch64();
+        }
+    }
+
+    private class LogMessageWithLevelNotAArch64Only extends LogMessageWithLevel {
+        public LogMessageWithLevelNotAArch64Only(String message, Level level) {
+            super(message, level);
+        }
+
+        public boolean isAvailable() {
+            return !Platform.isAArch64();
+        }
+    }
+
     private class LogMessageWithJFROnly extends LogMessageWithLevel {
         public LogMessageWithJFROnly(String message, Level level) {
             super(message, level);
@@ -108,8 +128,9 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Other:", Level.INFO),
 
         // Pre Evacuate Collection Set
-        new LogMessageWithLevel("JT Retire TLABs And Flush Logs \\(ms\\):", Level.DEBUG),
-        new LogMessageWithLevel("Non-JT Flush Logs \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("JavaThread Retire TLABs \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("JT Retire TLABs And Flush Logs \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Non-JT Flush Logs \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Choose Collection Set:", Level.DEBUG),
         new LogMessageWithLevel("Region Register:", Level.DEBUG),
         new LogMessageWithLevel("Prepare Heap Roots:", Level.DEBUG),
@@ -126,10 +147,15 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Merged Howl ArrayOfCards:", Level.DEBUG),
         new LogMessageWithLevel("Merged Howl BitMap:", Level.DEBUG),
         new LogMessageWithLevel("Merged Howl Full:", Level.DEBUG),
-        new LogMessageWithLevel("Log Buffers \\(ms\\):", Level.DEBUG),
-        new LogMessageWithLevel("Dirty Cards:", Level.DEBUG),
-        new LogMessageWithLevel("Merged Cards:", Level.DEBUG),
-        new LogMessageWithLevel("Skipped Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Merged From RS Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Total Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Merge Refinement Table:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Sweep \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Log Buffers \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Dirty Cards:", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Merged Cards:", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Skipped Cards:", Level.DEBUG),
+
         // Evacuate Collection Set
         new LogMessageWithLevel("Ext Root Scanning \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Thread Roots \\(ms\\):", Level.TRACE),
@@ -173,15 +199,20 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Merge Per-Thread State \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("LAB Waste:", Level.DEBUG),
         new LogMessageWithLevel("LAB Undo Waste:", Level.DEBUG),
-        new LogMessageWithLevel("Evac Fail Extra Cards:", Level.DEBUG),
-        new LogMessageWithLevel("Clear Logged Cards \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Pending Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("To-Young-Gen Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Evac-Fail Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Marked Cards:", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Clear Pending Cards \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Evac Fail Extra Cards:", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Clear Logged Cards \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Recalculate Used Memory \\(ms\\):", Level.DEBUG),
 
         // Post Evacuate Cleanup 2
         new LogMessageWithLevel("Post Evacuate Cleanup 2:", Level.DEBUG),
         new LogMessageWithLevelC2OrJVMCIOnly("Update Derived Pointers", Level.DEBUG),
-        new LogMessageWithLevel("Redirty Logged Cards \\(ms\\):", Level.DEBUG),
-        new LogMessageWithLevel("Redirtied Cards:", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Redirty Logged Cards \\(ms\\):", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Redirtied Cards:", Level.DEBUG),
         new LogMessageWithLevel("Resize TLABs \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Free Collection Set \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Serial Free Collection Set:", Level.TRACE),
@@ -243,9 +274,10 @@ public class TestGCLogMessages {
     }
 
     LogMessageWithLevel concRefineMessages[] = new LogMessageWithLevel[] {
-        new LogMessageWithLevel("Mutator refinement: ", Level.DEBUG),
-        new LogMessageWithLevel("Concurrent refinement: ", Level.DEBUG),
-        new LogMessageWithLevel("Total refinement: ", Level.DEBUG),
+        new LogMessageWithLevelAArch64Only("Refinement: sweep: ", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Mutator refinement: ", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Concurrent refinement: ", Level.DEBUG),
+        new LogMessageWithLevelNotAArch64Only("Total refinement: ", Level.DEBUG),
         // "Concurrent refinement rate" optionally printed if any.
         // "Generate dirty cards rate" optionally printed if any.
     };

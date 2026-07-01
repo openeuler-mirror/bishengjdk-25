@@ -52,6 +52,7 @@
 #include "utilities/quickSort.hpp"
 #include "utilities/ticks.hpp"
 
+#ifndef AARCH64
 G1DirtyCardQueue::G1DirtyCardQueue(G1DirtyCardQueueSet* qset) :
   PtrQueue(qset),
   _refinement_stats(new G1ConcurrentRefineStats())
@@ -597,3 +598,4 @@ size_t G1DirtyCardQueueSet::mutator_refinement_threshold() const {
 void G1DirtyCardQueueSet::set_mutator_refinement_threshold(size_t value) {
   Atomic::store(&_mutator_refinement_threshold, value);
 }
+#endif // !AARCH64

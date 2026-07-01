@@ -46,6 +46,7 @@ import java.util.Set;
 import gc.testlibrary.g1.MixedGCProvoker;
 import jdk.jfr.Recording;
 import jdk.test.lib.Asserts;
+import jdk.test.lib.Platform;
 import jdk.test.lib.jfr.EventNames;
 import jdk.test.whitebox.WhiteBox;
 
@@ -86,7 +87,38 @@ public class TestG1ParallelPhases {
             .map(e -> e.getValue("name").toString())
             .collect(toSet());
 
-        Set<String> allPhases = of(
+        Set<String> allPhases = Platform.isAArch64() ? of(
+            "ExtRootScan",
+            "ThreadRoots",
+            "VM Global",
+            "JNI Global",
+            "Thread OopStorage",
+            "ThreadService OopStorage",
+            "JVMTI OopStorage",
+            "CLDGRoots",
+            "CMRefRoots",
+            "MergeER",
+            "MergeRS",
+            "ScanHR",
+            "CodeRoots",
+            "ObjCopy",
+            "Termination",
+            "RecalculateUsed",
+            "ResizeTLABs",
+            "FreeCSet",
+            "UpdateDerivedPointers",
+            "EagerlyReclaimHumongousObjects",
+            "ResetPartialArrayStateManager",
+            "ClearPendingCards",
+            "MergePSS",
+            "NonYoungFreeCSet",
+            "YoungFreeCSet",
+            "RebuildFreeList",
+            "SampleCandidates",
+            "ResetMarkingState",
+            "NoteStartOfMark",
+            "RetireTLABs"
+        ) : of(
             "RetireTLABsAndFlushLogs",
             "NonJavaThreadFlushLogs",
             "ExtRootScan",
@@ -124,7 +156,20 @@ public class TestG1ParallelPhases {
 
         // Some GC phases may or may not occur depending on environment. Filter them out
         // since we can not reliably guarantee that they occur (or not).
-        Set<String> optPhases = of(
+        Set<String> optPhases = Platform.isAArch64() ? of(
+            // Does not always occur
+            "SweepRT",
+            // The following phases only occur on evacuation failure.
+            "RestoreEvacuationFailedRegions",
+            "RemoveSelfForwards",
+            "RestorePreservedMarks",
+            "ProcessEvacuationFailedRegions",
+            // Generally optional phases.
+            "OptScanHR",
+            "OptMergeRS",
+            "OptCodeRoots",
+            "OptObjCopy"
+        ) : of(
             // The following phases only occur on evacuation failure.
             "RestoreEvacuationFailedRegions",
             "RemoveSelfForwards",

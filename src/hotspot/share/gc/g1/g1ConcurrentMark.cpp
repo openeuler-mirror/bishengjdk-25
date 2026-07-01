@@ -27,13 +27,23 @@
 #include "gc/g1/g1BarrierSet.hpp"
 #include "gc/g1/g1BatchedTask.hpp"
 #include "gc/g1/g1CardSetMemory.hpp"
+#ifdef AARCH64
+#include "gc/g1/g1CardTableClaimTable.inline.hpp"
+#endif // AARCH64
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1CollectionSetChooser.hpp"
 #include "gc/g1/g1CollectorState.hpp"
 #include "gc/g1/g1ConcurrentMark.inline.hpp"
+#ifdef AARCH64
+#include "gc/g1/g1ConcurrentMarkRemarkTasks.hpp"
+#endif // AARCH64
 #include "gc/g1/g1ConcurrentMarkThread.inline.hpp"
 #include "gc/g1/g1ConcurrentRebuildAndScrub.hpp"
+#ifdef AARCH64
+#include "gc/g1/g1ConcurrentRefine.hpp"
+#else // AARCH64
 #include "gc/g1/g1DirtyCardQueue.hpp"
+#endif // AARCH64
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "gc/g1/g1HeapRegionManager.hpp"
 #include "gc/g1/g1HeapRegionPrinter.hpp"
@@ -163,7 +173,11 @@ G1CMMarkStack::TaskQueueEntryChunk* G1CMMarkStack::ChunkAllocator::allocate_new_
       return nullptr;
     }
 
+#ifdef AARCH64
+    MutexLocker x(G1MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
     MutexLocker x(MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
     if (Atomic::load_acquire(&_buckets[bucket]) == nullptr) {
       size_t desired_capacity = bucket_size(bucket) * 2;
       if (!try_expand_to(desired_capacity)) {
@@ -292,13 +306,21 @@ void G1CMMarkStack::add_chunk_to_list(TaskQueueEntryChunk* volatile* list, TaskQ
 }
 
 void G1CMMarkStack::add_chunk_to_chunk_list(TaskQueueEntryChunk* elem) {
+#ifdef AARCH64
+  MutexLocker x(G1MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
   MutexLocker x(MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
   add_chunk_to_list(&_chunk_list, elem);
   _chunks_in_chunk_list++;
 }
 
 void G1CMMarkStack::add_chunk_to_free_list(TaskQueueEntryChunk* elem) {
+#ifdef AARCH64
+  MutexLocker x(G1MarkStackFreeList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
   MutexLocker x(MarkStackFreeList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
   add_chunk_to_list(&_free_list, elem);
 }
 
@@ -311,7 +333,11 @@ G1CMMarkStack::TaskQueueEntryChunk* G1CMMarkStack::remove_chunk_from_list(TaskQu
 }
 
 G1CMMarkStack::TaskQueueEntryChunk* G1CMMarkStack::remove_chunk_from_chunk_list() {
+#ifdef AARCH64
+  MutexLocker x(G1MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
   MutexLocker x(MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
   TaskQueueEntryChunk* result = remove_chunk_from_list(&_chunk_list);
   if (result != nullptr) {
     _chunks_in_chunk_list--;
@@ -320,7 +346,11 @@ G1CMMarkStack::TaskQueueEntryChunk* G1CMMarkStack::remove_chunk_from_chunk_list(
 }
 
 G1CMMarkStack::TaskQueueEntryChunk* G1CMMarkStack::remove_chunk_from_free_list() {
+#ifdef AARCH64
+  MutexLocker x(G1MarkStackFreeList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
   MutexLocker x(MarkStackFreeList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
   return remove_chunk_from_list(&_free_list);
 }
 
@@ -431,9 +461,17 @@ bool G1CMRootMemRegions::contains(const MemRegion mr) const {
 }
 
 void G1CMRootMemRegions::notify_scan_done() {
+#ifdef AARCH64
+  MutexLocker x(G1RootRegionScan_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
   MutexLocker x(RootRegionScan_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
   _scan_in_progress = false;
+#ifdef AARCH64
+  G1RootRegionScan_lock->notify_all();
+#else // AARCH64
   RootRegionScan_lock->notify_all();
+#endif // AARCH64
 }
 
 void G1CMRootMemRegions::cancel_scan() {
@@ -458,7 +496,11 @@ bool G1CMRootMemRegions::wait_until_scan_finished() {
   }
 
   {
+#ifdef AARCH64
+    MonitorLocker ml(G1RootRegionScan_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
     MonitorLocker ml(RootRegionScan_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
     while (scan_in_progress()) {
       ml.wait();
     }
@@ -481,7 +523,11 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
 
   // _finger set in set_non_marking_state
 
+#ifdef AARCH64
+  _worker_id_offset(G1ConcRefinementThreads), // The refinement control thread does not refine cards, so it's just the worker threads.
+#else // AARCH64
   _worker_id_offset(G1DirtyCardQueueSet::num_par_ids() + G1ConcRefinementThreads),
+#endif // AARCH64
   _max_num_tasks(MAX2(ConcGCThreads, ParallelGCThreads)),
   // _num_active_tasks set in set_non_marking_state()
   // _tasks set inside the constructor
@@ -518,7 +564,11 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
   _top_at_rebuild_starts(NEW_C_HEAP_ARRAY(HeapWord*, _g1h->max_num_regions(), mtGC)),
   _needs_remembered_set_rebuild(false)
 {
+#ifdef AARCH64
+  assert(G1CGC_lock != nullptr, "CGC_lock must be initialized");
+#else // AARCH64
   assert(CGC_lock != nullptr, "CGC_lock must be initialized");
+#endif // AARCH64
 
   _mark_bitmap.initialize(g1h->reserved(), bitmap_storage);
 
@@ -1124,7 +1174,11 @@ uint G1ConcurrentMark::completed_mark_cycles() const {
 }
 
 void G1ConcurrentMark::concurrent_cycle_end(bool mark_cycle_completed) {
+#ifdef AARCH64
+  _g1h->collector_state()->set_clear_bitmap_in_progress(false);
+#else // AARCH64
   _g1h->collector_state()->set_clearing_bitmap(false);
+#endif // AARCH64
 
   _g1h->trace_heap_after_gc(_gc_tracer_cm);
 
@@ -1151,7 +1205,11 @@ void G1ConcurrentMark::mark_from_roots() {
   // worker threads may currently exist and more may not be
   // available.
   active_workers = _concurrent_workers->set_active_workers(active_workers);
+#ifdef AARCH64
+  log_info(gc, task)("Concurrent Mark Using %u of %u Workers", active_workers, _concurrent_workers->max_workers());
+#else // AARCH64
   log_info(gc, task)("Using %u workers of %u for marking", active_workers, _concurrent_workers->max_workers());
+#endif // AARCH64
 
   _num_concurrent_workers = active_workers;
 
@@ -1197,6 +1255,7 @@ void G1ConcurrentMark::verify_during_pause(G1HeapVerifier::G1VerifyType type,
   }
 }
 
+#ifndef AARCH64
 // Update per-region liveness info based on CM stats. Then, reclaim empty
 // regions right away and select certain regions (e.g. sparse ones) for remset
 // rebuild.
@@ -1370,6 +1429,7 @@ public:
     return false;
   }
 };
+#endif // !AARCH64
 
 class G1ObjectCountIsAliveClosure: public BoolObjectClosure {
   G1CollectedHeap* _g1h;
@@ -1391,7 +1451,11 @@ void G1ConcurrentMark::remark() {
   }
 
   G1Policy* policy = _g1h->policy();
+#ifdef AARCH64
+  policy->record_pause_start_time();
+#else // AARCH64
   policy->record_concurrent_mark_remark_start();
+#endif // AARCH64
 
   double start = os::elapsedTime();
 
@@ -1513,6 +1577,22 @@ void G1ConcurrentMark::compute_new_sizes() {
   _g1h->monitoring_support()->update_sizes();
 }
 
+#ifdef AARCH64
+class G1UpdateRegionsAfterRebuild : public G1HeapRegionClosure {
+  G1CollectedHeap* _g1h;
+
+public:
+  G1UpdateRegionsAfterRebuild(G1CollectedHeap* g1h) : _g1h(g1h) { }
+
+  bool do_heap_region(G1HeapRegion* r) override {
+    // Update the remset tracking state from updating to complete
+    // if remembered sets have been rebuilt.
+    _g1h->policy()->remset_tracker()->update_after_rebuild(r);
+    return false;
+  }
+};
+#endif // AARCH64
+
 void G1ConcurrentMark::cleanup() {
   assert_at_safepoint_on_vm_thread();
 
@@ -1522,7 +1602,11 @@ void G1ConcurrentMark::cleanup() {
   }
 
   G1Policy* policy = _g1h->policy();
+#ifdef AARCH64
+  policy->record_pause_start_time();
+#else // AARCH64
   policy->record_concurrent_mark_cleanup_start();
+#endif // AARCH64
 
   double start = os::elapsedTime();
 
@@ -1831,6 +1915,10 @@ class G1RemarkThreadsClosure : public ThreadClosure {
 };
 
 class G1CMRemarkTask : public WorkerTask {
+#ifdef AARCH64
+  // For Threads::possibly_parallel_threads_do
+  ThreadsClaimTokenScope _threads_claim_token_scope;
+#endif // AARCH64
   G1ConcurrentMark* _cm;
 public:
   void work(uint worker_id) {
@@ -1854,7 +1942,11 @@ public:
   }
 
   G1CMRemarkTask(G1ConcurrentMark* cm, uint active_workers) :
+#ifdef AARCH64
+    WorkerTask("Par Remark"), _threads_claim_token_scope(), _cm(cm) {
+#else // AARCH64
     WorkerTask("Par Remark"), _cm(cm) {
+#endif // AARCH64
     _cm->terminator()->reset_for_reuse(active_workers);
   }
 };
@@ -1873,8 +1965,9 @@ void G1ConcurrentMark::finalize_marking() {
   // through the task.
 
   {
+#ifndef AARCH64
     StrongRootsScope srs(active_workers);
-
+#endif // !AARCH64
     G1CMRemarkTask remarkTask(this, active_workers);
     // We will start all available threads, even if we decide that the
     // active_workers will be fewer. The extra ones will just bail out
@@ -1984,7 +2077,12 @@ public:
 };
 
 void G1ConcurrentMark::verify_no_collection_set_oops() {
+#ifdef AARCH64
+  assert(SafepointSynchronize::is_at_safepoint() || !is_init_completed(),
+         "should be at a safepoint or initializing");
+#else // AARCH64
   assert(SafepointSynchronize::is_at_safepoint(), "should be at a safepoint");
+#endif // AARCH64
   if (!_g1h->collector_state()->mark_or_rebuild_in_progress()) {
     return;
   }
@@ -2982,13 +3080,18 @@ G1CMTask::G1CMTask(uint worker_id,
 #define G1PPRL_BYTE_FORMAT            "  %9zu"
 #define G1PPRL_BYTE_H_FORMAT          "  %9s"
 #define G1PPRL_DOUBLE_FORMAT          "%14.1f"
+#ifndef AARCH64
 #define G1PPRL_GCEFF_FORMAT           "  %14s"
+#endif // !AARCH64
 #define G1PPRL_GCEFF_H_FORMAT         "  %14s"
 #define G1PPRL_GID_H_FORMAT           "  %9s"
 #define G1PPRL_GID_FORMAT             "  " UINT32_FORMAT_W(9)
 #define G1PPRL_LEN_FORMAT             "  " UINT32_FORMAT_W(14)
 #define G1PPRL_LEN_H_FORMAT           "  %14s"
 #define G1PPRL_GID_GCEFF_FORMAT       "  %14.1f"
+#ifdef AARCH64
+#define G1PPRL_GID_LIVENESS_FORMAT    "  %9.2f"
+#endif // AARCH64
 
 // For summary info
 #define G1PPRL_SUM_ADDR_FORMAT(tag)    "  " tag ":" G1PPRL_ADDR_BASE_FORMAT
@@ -3058,11 +3161,17 @@ bool G1PrintRegionLivenessInfoClosure::do_heap_region(G1HeapRegion* r) {
   size_t remset_bytes    = r->rem_set()->mem_size();
   size_t code_roots_bytes = r->rem_set()->code_roots_mem_size();
   const char* remset_type = r->rem_set()->get_short_state_str();
+#ifdef AARCH64
+  uint cset_group_id     = r->rem_set()->has_cset_group()
+                         ? r->rem_set()->cset_group_id()
+                         : G1CSetCandidateGroup::NoRemSetId;
+#else // AARCH64
   uint cset_groud_gid     = 0;
 
   if (r->rem_set()->is_added_to_cset_group()) {
     cset_groud_gid = r->rem_set()->cset_group_id();
   }
+#endif // AARCH64
 
   _total_used_bytes      += used_bytes;
   _total_capacity_bytes  += capacity_bytes;
@@ -3082,7 +3191,11 @@ bool G1PrintRegionLivenessInfoClosure::do_heap_region(G1HeapRegion* r) {
                         type, p2i(bottom), p2i(end),
                         used_bytes, live_bytes,
                         remset_type, code_roots_bytes,
+#ifdef AARCH64
+                        cset_group_id);
+#else // AARCH64
                         cset_groud_gid);
+#endif // AARCH64
 
   return false;
 }
@@ -3097,7 +3210,11 @@ G1PrintRegionLivenessInfoClosure::~G1PrintRegionLivenessInfoClosure() {
   // add static memory usages to remembered set sizes
   _total_remset_bytes += G1HeapRegionRemSet::static_mem_size();
 
+#ifdef AARCH64
+  log_cset_candidate_groups();
+#else // AARCH64
   do_cset_groups();
+#endif // AARCH64
 
   // Print the footer of the output.
   log_trace(gc, liveness)(G1PPRL_LINE_PREFIX);
@@ -3117,10 +3234,42 @@ G1PrintRegionLivenessInfoClosure::~G1PrintRegionLivenessInfoClosure() {
                          bytes_to_mb(_total_code_roots_bytes));
 }
 
+#ifdef AARCH64
+void G1PrintRegionLivenessInfoClosure::log_cset_candidate_group_add_total(G1CSetCandidateGroup* group, const char* type) {
+  log_trace(gc, liveness)(G1PPRL_LINE_PREFIX
+                          G1PPRL_GID_FORMAT
+                          G1PPRL_LEN_FORMAT
+                          G1PPRL_GID_GCEFF_FORMAT
+                          G1PPRL_GID_LIVENESS_FORMAT
+                          G1PPRL_BYTE_FORMAT
+                          G1PPRL_TYPE_H_FORMAT,
+                          group->group_id(),
+                          group->length(),
+                          group->length() > 0 ? group->gc_efficiency() : 0.0,
+                          group->length() > 0 ? group->liveness_percent() : 0.0,
+                          group->card_set()->mem_size(),
+                          type);
+  _total_remset_bytes += group->card_set()->mem_size();
+}
+
+void G1PrintRegionLivenessInfoClosure::log_cset_candidate_grouplist(G1CSetCandidateGroupList& gl, const char* type) {
+  for (G1CSetCandidateGroup* group : gl) {
+    log_cset_candidate_group_add_total(group, type);
+  }
+}
+
+void G1PrintRegionLivenessInfoClosure::log_cset_candidate_groups() {
+#else // AARCH64
 void G1PrintRegionLivenessInfoClosure::do_cset_groups() {
+#endif // AARCH64
   log_trace(gc, liveness)(G1PPRL_LINE_PREFIX);
+#ifdef AARCH64
+  log_trace(gc, liveness)(G1PPRL_LINE_PREFIX" Collection Set Candidate Groups");
+  log_trace(gc, liveness)(G1PPRL_LINE_PREFIX " Types: Y=Young, M=From Marking Regions, R=Retained Regions");
+#else // AARCH64
   log_trace(gc, liveness)(G1PPRL_LINE_PREFIX" Collectionset Candidate Groups");
   log_trace(gc, liveness)(G1PPRL_LINE_PREFIX " Types: Y=Young Regions, M=From Marking Regions, R=Retained Regions");
+#endif // AARCH64
   log_trace(gc, liveness)(G1PPRL_LINE_PREFIX
                           G1PPRL_GID_H_FORMAT
                           G1PPRL_LEN_H_FORMAT
@@ -3144,10 +3293,21 @@ void G1PrintRegionLivenessInfoClosure::do_cset_groups() {
                           "(bytes)", "");
 
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
+#ifndef AARCH64
   G1CSetCandidateGroup* young_only_cset_group =g1h->young_regions_cset_group();
+#endif // !AARCH64
 
+#ifdef AARCH64
+  log_cset_candidate_group_add_total(g1h->young_regions_cset_group(), "Y");
+#else // AARCH64
   _total_remset_bytes += young_only_cset_group->card_set()->mem_size();
+#endif // AARCH64
 
+#ifdef AARCH64
+  G1CollectionSetCandidates* candidates = g1h->policy()->candidates();
+  log_cset_candidate_grouplist(candidates->from_marking_groups(), "M");
+  log_cset_candidate_grouplist(candidates->retained_groups(), "R");
+#else // AARCH64
   log_trace(gc, liveness)(G1PPRL_LINE_PREFIX
                           G1PPRL_GID_FORMAT
                           G1PPRL_LEN_FORMAT
@@ -3189,4 +3349,5 @@ void G1PrintRegionLivenessInfoClosure::do_cset_groups() {
                             group->liveness(), group->card_set()->mem_size(),
                             "R");
   }
+#endif // AARCH64
 }

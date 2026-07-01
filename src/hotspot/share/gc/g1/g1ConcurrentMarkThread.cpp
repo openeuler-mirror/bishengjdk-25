@@ -82,7 +82,11 @@ void G1ConcurrentMarkThread::delay_to_keep_mmu(bool remark) {
   if (policy->use_adaptive_young_list_length()) {
     double delay_end_sec = mmu_delay_end(policy, remark);
     // Wait for timeout or thread termination request.
+#ifdef AARCH64
+    MonitorLocker ml(G1CGC_lock, Monitor::_no_safepoint_check_flag);
+#else // AARCH64
     MonitorLocker ml(CGC_lock, Monitor::_no_safepoint_check_flag);
+#endif // AARCH64
     while (!_cm->has_aborted() && !should_terminate()) {
       double sleep_time_sec = (delay_end_sec - os::elapsedTime());
       jlong sleep_time_ms = ceil(sleep_time_sec * MILLIUNITS);
@@ -149,12 +153,21 @@ void G1ConcurrentMarkThread::stop_service() {
     _cm->abort_marking_threads();
   }
 
+#ifdef AARCH64
+  MutexLocker ml(G1CGC_lock, Mutex::_no_safepoint_check_flag);
+  G1CGC_lock->notify_all();
+#else // AARCH64
   MutexLocker ml(CGC_lock, Mutex::_no_safepoint_check_flag);
   CGC_lock->notify_all();
+#endif // AARCH64
 }
 
 bool G1ConcurrentMarkThread::wait_for_next_cycle() {
+#ifdef AARCH64
+  MonitorLocker ml(G1CGC_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
   MonitorLocker ml(CGC_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
   while (!in_progress() && !should_terminate()) {
     ml.wait();
   }

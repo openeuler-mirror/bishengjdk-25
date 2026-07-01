@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,12 +57,20 @@ class G1HeapRegionRemSet : public CHeapObj<mtGC> {
   void clear_fcc();
 
   G1CardSet* card_set() {
+#ifdef AARCH64
+    assert(has_cset_group(), "pre-condition");
+#else // AARCH64
     assert(is_added_to_cset_group(), "pre-condition");
+#endif // AARCH64
     return cset_group()->card_set();
   }
 
   const G1CardSet* card_set() const {
+#ifdef AARCH64
+    assert(has_cset_group(), "pre-condition");
+#else // AARCH64
     assert(is_added_to_cset_group(), "pre-condition");
+#endif // AARCH64
     return cset_group()->card_set();
   }
 
@@ -71,7 +79,11 @@ public:
   ~G1HeapRegionRemSet();
 
   bool cardset_is_empty() const {
+#ifdef AARCH64
+    return !has_cset_group() || card_set()->is_empty();
+#else // AARCH64
     return !is_added_to_cset_group() || card_set()->is_empty();
+#endif // AARCH64
   }
 
   void install_cset_group(G1CSetCandidateGroup* cset_group) {
@@ -83,7 +95,11 @@ public:
 
   void uninstall_cset_group();
 
+#ifdef AARCH64
+  bool has_cset_group() const {
+#else // AARCH64
   bool is_added_to_cset_group() const {
+#endif // AARCH64
     return _cset_group != nullptr;
   }
 
@@ -96,7 +112,11 @@ public:
   }
 
   uint cset_group_id() const {
+#ifdef AARCH64
+    assert(has_cset_group(), "pre-condition");
+#else // AARCH64
     assert(is_added_to_cset_group(), "pre-condition");
+#endif // AARCH64
     return cset_group()->group_id();
   }
 
@@ -118,7 +138,11 @@ public:
   inline static void iterate_for_merge(G1CardSet* card_set, CardOrRangeVisitor& cl);
 
   size_t occupied() {
+#ifdef AARCH64
+    assert(has_cset_group(), "pre-condition");
+#else // AARCH64
     assert(is_added_to_cset_group(), "pre-condition");
+#endif // AARCH64
     return card_set()->occupied();
   }
 

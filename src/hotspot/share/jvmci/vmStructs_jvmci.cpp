@@ -495,6 +495,32 @@
       declare_type(InstanceKlass, Klass)                                  \
     declare_type(ConstantPool, Metadata)                                  \
 
+#ifdef AARCH64
+#define VM_INT_CONSTANTS_CARD_TABLE_AARCH64(declare_constant_with_value)        \
+  declare_constant_with_value("CardTable::clean_card", CardTable::clean_card_val())
+#else
+#define VM_INT_CONSTANTS_CARD_TABLE_AARCH64(declare_constant_with_value)
+#endif // AARCH64
+
+#ifndef AARCH64
+#define VM_ADDRESSES_G1_NON_AARCH64(declare_function)                          \
+  G1GC_ONLY(declare_function(JVMCIRuntime::write_barrier_post))
+#else
+#define VM_ADDRESSES_G1_NON_AARCH64(declare_function)
+#endif // !AARCH64
+
+#ifdef AARCH64
+#define VM_INT_CONSTANTS_JVMCI_G1GC_AARCH64(declare_constant_with_value)        \
+  declare_constant_with_value("G1ThreadLocalData::card_table_base_offset", in_bytes(G1ThreadLocalData::card_table_base_offset()))
+#define VM_INT_CONSTANTS_JVMCI_G1GC_NON_AARCH64(declare_constant_with_value)
+#else
+#define VM_INT_CONSTANTS_JVMCI_G1GC_AARCH64(declare_constant_with_value)
+#define VM_INT_CONSTANTS_JVMCI_G1GC_NON_AARCH64(declare_constant_with_value)    \
+  declare_constant_with_value("G1CardTable::g1_young_gen", G1CardTable::g1_young_card_val()) \
+  declare_constant_with_value("G1ThreadLocalData::dirty_card_queue_index_offset", in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset())) \
+  declare_constant_with_value("G1ThreadLocalData::dirty_card_queue_buffer_offset", in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()))
+#endif // AARCH64
+
 #define VM_INT_CONSTANTS(declare_constant, declare_constant_with_value, declare_preprocessor_constant) \
   declare_preprocessor_constant("ASSERT", DEBUG_ONLY(1) NOT_DEBUG(0))     \
                                                                           \
@@ -561,6 +587,7 @@
   declare_constant(BranchData::not_taken_off_set)                         \
                                                                           \
   declare_constant_with_value("CardTable::dirty_card", CardTable::dirty_card_val()) \
+  VM_INT_CONSTANTS_CARD_TABLE_AARCH64(declare_constant_with_value)           \
   declare_constant_with_value("LockStack::_end_offset", LockStack::end_offset()) \
   declare_constant_with_value("OMCache::oop_to_oop_difference", OMCache::oop_to_oop_difference()) \
   declare_constant_with_value("OMCache::oop_to_monitor_difference", OMCache::oop_to_monitor_difference()) \
@@ -932,7 +959,7 @@
   declare_function(JVMCIRuntime::vm_error)                                \
   declare_function(JVMCIRuntime::load_and_clear_exception)                \
   G1GC_ONLY(declare_function(JVMCIRuntime::write_barrier_pre))            \
-  G1GC_ONLY(declare_function(JVMCIRuntime::write_barrier_post))           \
+  VM_ADDRESSES_G1_NON_AARCH64(declare_function)                          \
   SHENANDOAHGC_ONLY(declare_function(ShenandoahRuntime::load_reference_barrier_strong))         \
   SHENANDOAHGC_ONLY(declare_function(ShenandoahRuntime::load_reference_barrier_strong_narrow))  \
   SHENANDOAHGC_ONLY(declare_function(ShenandoahRuntime::load_reference_barrier_weak))           \
@@ -951,12 +978,11 @@
   static_field(G1HeapRegion, LogOfHRGrainBytes, uint)
 
 #define VM_INT_CONSTANTS_JVMCI_G1GC(declare_constant, declare_constant_with_value, declare_preprocessor_constant) \
-  declare_constant_with_value("G1CardTable::g1_young_gen", G1CardTable::g1_young_card_val()) \
+  VM_INT_CONSTANTS_JVMCI_G1GC_NON_AARCH64(declare_constant_with_value)      \
   declare_constant_with_value("G1ThreadLocalData::satb_mark_queue_active_offset", in_bytes(G1ThreadLocalData::satb_mark_queue_active_offset())) \
   declare_constant_with_value("G1ThreadLocalData::satb_mark_queue_index_offset", in_bytes(G1ThreadLocalData::satb_mark_queue_index_offset())) \
   declare_constant_with_value("G1ThreadLocalData::satb_mark_queue_buffer_offset", in_bytes(G1ThreadLocalData::satb_mark_queue_buffer_offset())) \
-  declare_constant_with_value("G1ThreadLocalData::dirty_card_queue_index_offset", in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset())) \
-  declare_constant_with_value("G1ThreadLocalData::dirty_card_queue_buffer_offset", in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()))
+  VM_INT_CONSTANTS_JVMCI_G1GC_AARCH64(declare_constant_with_value)          \
 
 #endif // INCLUDE_G1GC
 
@@ -1019,7 +1045,6 @@
 #endif
 
 #ifdef AARCH64
-
 #define VM_STRUCTS_CPU(nonstatic_field, static_field, unchecked_nonstatic_field, volatile_nonstatic_field, nonproduct_nonstatic_field) \
   static_field(VM_Version, _zva_length, int)                            \
   static_field(StubRoutines::aarch64, _count_positives, address)        \

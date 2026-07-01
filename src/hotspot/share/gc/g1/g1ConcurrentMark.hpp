@@ -42,6 +42,11 @@
 
 class ConcurrentGCTimer;
 class G1CollectedHeap;
+#ifdef AARCH64
+class G1CSetCandidateGroup;
+class G1CSetCandidateGroupList;
+#endif // AARCH64
+
 class G1ConcurrentMark;
 class G1ConcurrentMarkThread;
 class G1CMOopClosure;
@@ -580,6 +585,9 @@ public:
   // TARS for the given region during remembered set rebuilding.
   inline HeapWord* top_at_rebuild_start(G1HeapRegion* r) const;
 
+#ifdef AARCH64
+  uint worker_id_offset() const { return _worker_id_offset; }
+#endif // AARCH64
   // Clear statistics gathered during the concurrent cycle for the given region after
   // it has been reclaimed.
   void clear_statistics(G1HeapRegion* r);
@@ -984,7 +992,13 @@ class G1PrintRegionLivenessInfoClosure : public G1HeapRegionClosure {
     return (double) val / (double) M;
   }
 
+#ifdef AARCH64
+  void log_cset_candidate_group_add_total(G1CSetCandidateGroup* gr, const char* type);
+  void log_cset_candidate_grouplist(G1CSetCandidateGroupList& gl, const char* type);
+  void log_cset_candidate_groups();
+#else // AARCH64
   void do_cset_groups();
+#endif // AARCH64
 
 public:
   // The header and footer are printed in the constructor and

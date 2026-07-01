@@ -75,14 +75,30 @@ class G1CSetCandidateGroup : public CHeapObj<mtGCCardSet>{
   size_t _reclaimable_bytes;
   double _gc_efficiency;
 
+#ifdef AARCH64
+public:
+  // The _group_id uniquely identifies a candidate group when printing, making it
+  // easier to associate regions with their assigned G1CSetCandidateGroup, if any.
+  // Special values for the id:
+  // * id 0 is reserved for regions that do not have a remembered set.
+  // * id 1 is reserved for the G1CollectionSetCandidate that contains all young regions.
+  // * other ids are handed out incrementally, starting from InitialId.
+  static const uint NoRemSetId = 0;
+  static const uint YoungRegionId = 1;
+  static const uint InitialId = 2;
+
+private:
+#else // AARCH64
   // The _group_id is primarily used when printing out per-region liveness information,
   // making it easier to associate regions with their assigned G1CSetCandidateGroup, if any.
   // Note:
   // * _group_id 0 is reserved for special G1CSetCandidateGroups that hold only a single region,
   //    such as G1CSetCandidateGroups for retained regions.
   // * _group_id 1 is reserved for the G1CSetCandidateGroup that contains all young regions.
+#endif // AARCH64
   const uint _group_id;
   static uint _next_group_id;
+
 public:
   G1CSetCandidateGroup();
   G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id);
@@ -98,11 +114,16 @@ public:
   G1CardSet* card_set() { return &_card_set; }
   const G1CardSet* card_set() const { return &_card_set; }
 
+#ifndef AARCH64
   uint group_id() const { return _group_id; }
-
+#endif // !AARCH64
   void calculate_efficiency();
 
+#ifdef AARCH64
+  double liveness_percent() const;
+#else // AARCH64
   size_t liveness() const;
+#endif // AARCH64
   // Comparison function to order regions in decreasing GC efficiency order. This
   // will cause regions with a lot of live objects and large remembered sets to end
   // up at the end of the list.
@@ -130,8 +151,15 @@ public:
     return _candidates.end();
   }
 
+#ifdef AARCH64
+  uint group_id() const { return _group_id; }
+#endif // AARCH64
   static void reset_next_group_id() {
+#ifdef AARCH64
+    _next_group_id = InitialId;
+#else // AARCH64
     _next_group_id = 2;
+#endif // AARCH64
   }
 };
 

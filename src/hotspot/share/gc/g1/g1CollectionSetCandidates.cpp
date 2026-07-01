@@ -27,7 +27,11 @@
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "utilities/growableArray.hpp"
 
+#ifdef AARCH64
+uint G1CSetCandidateGroup::_next_group_id = G1CSetCandidateGroup::InitialId;
+#else // AARCH64
 uint G1CSetCandidateGroup::_next_group_id = 2;
+#endif // AARCH64
 
 G1CSetCandidateGroup::G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id) :
   _candidates(4, mtGCCardSet),
@@ -63,10 +67,18 @@ void G1CSetCandidateGroup::calculate_efficiency() {
   _gc_efficiency = _reclaimable_bytes / predict_group_total_time_ms();
 }
 
+#ifdef AARCH64
+double G1CSetCandidateGroup::liveness_percent() const {
+  assert(length() > 0, "must be");
+#else // AARCH64
 size_t G1CSetCandidateGroup::liveness() const {
+#endif // AARCH64
   size_t capacity = length() * G1HeapRegion::GrainBytes;
-
+#ifdef AARCH64
+  return ((capacity - _reclaimable_bytes) * 100.0) / capacity;
+#else // AARCH64
   return (size_t) ceil(((capacity - _reclaimable_bytes) * 100.0) / capacity);
+#endif // AARCH64
 }
 
 void G1CSetCandidateGroup::clear(bool uninstall_group_cardset) {
