@@ -68,38 +68,6 @@ static SpinWait get_spin_wait_desc() {
   return SpinWait{};
 }
 
-static void enable_hisilicon_neon_intrinsic_defaults(bool is_hisilicon_950) {
-  if (is_hisilicon_950 &&
-      FLAG_IS_DEFAULT(UseStreamPrefetchForArrayCopy)) {
-    FLAG_SET_DEFAULT(UseStreamPrefetchForArrayCopy, false);
-  }
-}
-
-static void enable_hisilicon_sve1_intrinsic_defaults(bool is_hisilicon_950) {
-  if (!is_hisilicon_950) {
-    return;
-  }
-  if (FLAG_IS_DEFAULT(UseSVESmallBlockZeroing)) {
-    FLAG_SET_DEFAULT(UseSVESmallBlockZeroing, false);
-  }
-}
-
-static void enable_hisilicon_sve2_intrinsic_defaults() {
-  if (FLAG_IS_DEFAULT(UseSVEHashCodeIntrinsic)) {
-    FLAG_SET_DEFAULT(UseSVEHashCodeIntrinsic, false);
-  }
-}
-
-static void enable_hisilicon_intrinsic_defaults(bool is_hisilicon_950) {
-  enable_hisilicon_neon_intrinsic_defaults(is_hisilicon_950);
-  if (UseSVE >= 1) {
-    enable_hisilicon_sve1_intrinsic_defaults(is_hisilicon_950);
-  }
-  if (UseSVE >= 2) {
-    enable_hisilicon_sve2_intrinsic_defaults();
-  }
-}
-
 int VM_Version::get_cpu_model() {
   int cpu_lines = 0;
   if (FILE *f = fopen("/proc/cpuinfo", "r")) {
@@ -123,6 +91,15 @@ int VM_Version::get_cpu_model() {
     fclose(f);
   }
   return cpu_lines;
+}
+
+static bool is_950() {
+  return VM_Version::cpu_model() == 0xd06 || VM_Version::cpu_model2() == 0xd06;
+}
+
+static bool is_before_950() {
+  return VM_Version::cpu_model() < 0xd06 &&
+         (VM_Version::cpu_model2() == 0 || VM_Version::cpu_model2() < 0xd06);
 }
 
 void VM_Version::initialize() {
@@ -304,11 +281,6 @@ void VM_Version::initialize() {
     if (FLAG_IS_DEFAULT(UseSignumIntrinsic)) {
       FLAG_SET_DEFAULT(UseSignumIntrinsic, true);
     }
-  }
-
-  if (UseSIMDForStringEquals && (!UseSIMDForArrayEquals || UseSimpleArrayEquals)) {
-    warning("UseSIMDForStringEquals requires UseSIMDForArrayEquals and disabled UseSimpleArrayEquals; disabling");
-    FLAG_SET_DEFAULT(UseSIMDForStringEquals, false);
   }
 
   if (FLAG_IS_DEFAULT(UseCRC32)) {
@@ -685,43 +657,6 @@ void VM_Version::initialize() {
   }
 #endif
 
-  const bool is_hisilicon_cpu = _cpu == CPU_HISILICON;
-  const bool is_hisilicon_950 =
-      is_hisilicon_cpu &&
-      VM_Version::model_is(CPU_MODEL_HISILICON_950);
-  if (is_hisilicon_cpu) {
-    enable_hisilicon_intrinsic_defaults(is_hisilicon_950);
-  }
-
-  if (UseStreamPrefetchForArrayCopy && AvoidUnalignedAccesses) {
-    if (!FLAG_IS_DEFAULT(UseStreamPrefetchForArrayCopy)) {
-      warning("UseStreamPrefetchForArrayCopy specified, but requires unaligned memory accesses. Disabling.");
-    }
-    FLAG_SET_DEFAULT(UseStreamPrefetchForArrayCopy, false);
-  }
-  if (UseStreamPrefetchForArrayCopy && !is_hisilicon_950) {
-    if (!FLAG_IS_DEFAULT(UseStreamPrefetchForArrayCopy)) {
-      warning("UseStreamPrefetchForArrayCopy specified, but only available on HiSilicon 950 CPUs. Disabling.");
-    }
-    FLAG_SET_DEFAULT(UseStreamPrefetchForArrayCopy, false);
-  }
-  if (UseSVESmallBlockZeroing && UseSVE == 0) {
-    if (!FLAG_IS_DEFAULT(UseSVESmallBlockZeroing)) {
-      warning("UseSVESmallBlockZeroing specified, but SVE is not available. Disabling.");
-    }
-    FLAG_SET_DEFAULT(UseSVESmallBlockZeroing, false);
-  }
-  if (UseSVESmallBlockZeroing && !is_hisilicon_950) {
-    if (!FLAG_IS_DEFAULT(UseSVESmallBlockZeroing)) {
-      warning("UseSVESmallBlockZeroing specified, but only available on HiSilicon 950 CPUs. Disabling.");
-    }
-    FLAG_SET_DEFAULT(UseSVESmallBlockZeroing, false);
-  }
-  if (UseSVEHashCodeIntrinsic && (!is_hisilicon_cpu || UseSVE < 2)) {
-    warning("UseSVEHashCodeIntrinsic specified, but only available on HiSilicon CPUs with SVE2 enabled. Disabling.");
-    FLAG_SET_DEFAULT(UseSVEHashCodeIntrinsic, false);
-  }
-
   _spin_wait = get_spin_wait_desc();
 
   check_virtualizations();
@@ -754,6 +689,101 @@ void VM_Version::initialize() {
   _features_string = extract_features_string(_cpu_info_string,
                                              strnlen(_cpu_info_string, sizeof(buf)),
                                              features_offset);
+
+  const bool is_hisi_enabled = VM_Version::is_hisi_enabled();
+
+#define ENABLE_HISI_FLAG_BY_DEFAULT(flag)                                   \
+  do {                                                                      \
+    if (!flag && FLAG_IS_DEFAULT(flag)) {                                   \
+      FLAG_SET_DEFAULT(flag, true);                                         \
+    }                                                                       \
+  } while (false)
+
+#define DISABLE_HISI_FLAG(flag)                                             \
+  do {                                                                      \
+    if (flag) {                                                             \
+      if (!FLAG_IS_DEFAULT(flag)) {                                         \
+        warning("%s specified, but is not supported on this hardware. "      \
+                "Disabling.", #flag);                                       \
+      }                                                                     \
+      flag = false;                                                         \
+    }                                                                       \
+  } while (false)
+
+  if (is_hisi_enabled) {
+    if (UseHisiOptimizations) {
+      if (VM_Version::supports_sve2()) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseSVEHashCodeIntrinsic);
+      }
+
+      if (is_950()) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseStreamPrefetchForArrayCopy);
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseSVESmallBlockZeroing);
+      }
+
+      // This check may override UseLSE initialized above, so keep it late in
+      // VM_Version::initialize().
+      if (is_before_950() && UseLSE && FLAG_IS_DEFAULT(UseLSE)) {
+        FLAG_SET_DEFAULT(UseLSE, false);
+      }
+
+      if (is_before_950() && UseLSE) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseLSEPrefetch);
+      }
+
+      ENABLE_HISI_FLAG_BY_DEFAULT(UseSIMDForStringEquals);
+      ENABLE_HISI_FLAG_BY_DEFAULT(UseUTFConversionIntrinsics);
+      ENABLE_HISI_FLAG_BY_DEFAULT(UseStlrForRelease);
+    }
+
+    if (UseSVEHashCodeIntrinsic && !VM_Version::supports_sve2()) {
+      if (!FLAG_IS_DEFAULT(UseSVEHashCodeIntrinsic)) {
+        warning("UseSVEHashCodeIntrinsic specified, but requires SVE2. "
+                "Disabling.");
+      }
+      FLAG_SET_DEFAULT(UseSVEHashCodeIntrinsic, false);
+    }
+  } else {
+    DISABLE_HISI_FLAG(UseHisiOptimizations);
+    DISABLE_HISI_FLAG(UseSIMDForStringEquals);
+    DISABLE_HISI_FLAG(UseUTFConversionIntrinsics);
+    DISABLE_HISI_FLAG(UseStlrForRelease);
+    DISABLE_HISI_FLAG(UseSVEHashCodeIntrinsic);
+    DISABLE_HISI_FLAG(UseStreamPrefetchForArrayCopy);
+    DISABLE_HISI_FLAG(UseSVESmallBlockZeroing);
+    DISABLE_HISI_FLAG(UseLSEPrefetch);
+  }
+#undef ENABLE_HISI_FLAG_BY_DEFAULT
+#undef DISABLE_HISI_FLAG
+
+  if (UseSIMDForStringEquals && (!UseSIMDForArrayEquals || UseSimpleArrayEquals)) {
+    if (!FLAG_IS_DEFAULT(UseSIMDForStringEquals)) {
+      warning("UseSIMDForStringEquals specified, but requires UseSIMDForArrayEquals and "
+              "disabled UseSimpleArrayEquals. Disabling.");
+    }
+    FLAG_SET_DEFAULT(UseSIMDForStringEquals, false);
+  }
+
+  if (UseStreamPrefetchForArrayCopy && AvoidUnalignedAccesses) {
+    if (!FLAG_IS_DEFAULT(UseStreamPrefetchForArrayCopy)) {
+      warning("UseStreamPrefetchForArrayCopy specified, but requires disabled "
+              "AvoidUnalignedAccesses. Disabling.");
+    }
+    FLAG_SET_DEFAULT(UseStreamPrefetchForArrayCopy, false);
+  }
+
+  if (UseSVESmallBlockZeroing && UseSVE == 0) {
+    if (!FLAG_IS_DEFAULT(UseSVESmallBlockZeroing)) {
+      warning("UseSVESmallBlockZeroing specified, but requires UseSVE > 0. Disabling.");
+    }
+    FLAG_SET_DEFAULT(UseSVESmallBlockZeroing, false);
+  }
+
+  if (UseSVEHashCodeIntrinsic && !UseVectorizedHashCodeIntrinsic) {
+    warning("UseSVEHashCodeIntrinsic specified, but requires "
+            "-XX:+UseVectorizedHashCodeIntrinsic. Disabling.");
+    FLAG_SET_DEFAULT(UseSVEHashCodeIntrinsic, false);
+  }
 }
 
 #if defined(LINUX)
