@@ -79,8 +79,8 @@ jint ParallelScavengeHeap::initialize() {
   if (Universe::is_dynamic_max_heap_enable()) {
     max_old_size = GenArguments::max_old_size(reserved_heap_size);
   }
-  ReservedSpace old_rs   = heap_rs.first_part(max_old_size);
-  ReservedSpace young_rs = heap_rs.last_part(max_old_size);
+  ReservedSpace old_rs   = heap_rs.first_part(max_old_size, GenAlignment);
+  ReservedSpace young_rs = heap_rs.last_part(max_old_size, GenAlignment);
   assert(young_rs.size() == MaxNewSize || Universe::is_dynamic_max_heap_enable(), "Didn't reserve all of the heap");
 
   PSCardTable* card_table = new PSCardTable(_reserved);
