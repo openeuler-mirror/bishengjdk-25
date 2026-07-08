@@ -25,6 +25,9 @@
 #include "cds/aotLogging.hpp"
 #include "cds/cds_globals.hpp"
 #include "cds/cdsConfig.hpp"
+#ifdef AARCH64
+#include "classfile/bytecodeEnhancement.hpp"
+#endif
 #include "classfile/classLoader.hpp"
 #include "classfile/javaAssertions.hpp"
 #include "classfile/moduleEntry.hpp"
@@ -3874,6 +3877,10 @@ jint Arguments::apply_ergo(JavaVMInitArgs* args) {
   if (UseCompressedClassPointers) {
     CompressedKlassPointers::pre_initialize();
   }
+
+  AARCH64_ONLY(if (BytecodeEnhancementPaths != nullptr || UsePrimitiveHashSet) {
+    BytecodeEnhancement::enable();
+  })
 
   CDSConfig::ergo_initialize();
 

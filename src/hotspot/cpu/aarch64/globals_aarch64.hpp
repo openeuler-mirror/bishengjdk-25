@@ -231,6 +231,15 @@ constexpr uint string_case_backend_value(StringCaseBackend backend) {
   product(ccstr, NUMABindPolicy, NULL,                                  \
           "Enable deterministic NUMA placement with combined Options,"  \
           "including prefix=<id> and div=<N>.")                         \
+                                                                        \
+  product(ccstr, BytecodeEnhancementPaths, nullptr,                     \
+          "Bytecode enhancement paths. It contains enhancement lists "  \
+          "and enhancement contents")                                   \
+  product(bool, ExitOnBytecodeEnhancementFailure, false,                \
+          "Exit the VM when a bytecode enhancement cannot be applied")  \
+  product(bool, UsePrimitiveHashSet, false,                             \
+          "Replace java.util.HashSet with the JDK internal primitive "  \
+          "implementation")                                             \
 
 // end of ARCH_FLAGS
 
