@@ -251,6 +251,7 @@ uintptr_t related_data_jbolt[] = {
  */
 void JBoltManager::log_stacktrace(const JfrStackTrace& stacktrace) {
   Thread* thread = Thread::current();
+  ResetNoHandleMark rnhm;
   HandleMark hm(thread);
 
   const JfrStackFrames* frames = stacktrace.get_frames();
