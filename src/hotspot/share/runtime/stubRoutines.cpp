@@ -97,6 +97,8 @@ STUBGEN_ENTRIES_DO(DEFINE_ENTRY_FIELD, DEFINE_ENTRY_FIELD_INIT, DEFINE_ENTRY_FIE
 #undef DEFINE_ENTRY_FIELD_INIT
 #undef DEFINE_ENTRY_FIELD
 
+int StubRoutines::_string_case_intrinsic_min_length = 0;
+
 jint    StubRoutines::_verify_oop_count                         = 0;
 
 

@@ -259,6 +259,7 @@ const TypeFunc* OptoRuntime::_dilithiumDecomposePoly_Type         = nullptr;
 const TypeFunc* OptoRuntime::_base64_encodeBlock_Type             = nullptr;
 const TypeFunc* OptoRuntime::_base64_decodeBlock_Type             = nullptr;
 const TypeFunc* OptoRuntime::_string_IndexOf_Type                 = nullptr;
+const TypeFunc* OptoRuntime::_stringCaseConvert_Type              = nullptr;
 const TypeFunc* OptoRuntime::_poly1305_processBlocks_Type         = nullptr;
 const TypeFunc* OptoRuntime::_intpoly_montgomeryMult_P256_Type    = nullptr;
 const TypeFunc* OptoRuntime::_intpoly_assign_Type                 = nullptr;
@@ -1697,6 +1698,24 @@ static const TypeFunc* make_string_IndexOf_Type() {
   return TypeFunc::make(domain, range);
 }
 
+static const TypeFunc* make_stringCaseConvert_Type() {
+  int argcnt = 4;
+
+  const Type** fields = TypeTuple::fields(argcnt);
+  int argp = TypeFunc::Parms;
+  fields[argp++] = TypeRawPtr::BOTTOM; // source byte address
+  fields[argp++] = TypeRawPtr::BOTTOM; // destination byte address
+  fields[argp++] = TypeInt::INT;       // first character index
+  fields[argp++] = TypeInt::INT;       // character count from first
+  assert(argp == TypeFunc::Parms + argcnt, "correct decoding");
+  const TypeTuple* domain = TypeTuple::make(TypeFunc::Parms + argcnt, fields);
+
+  fields = TypeTuple::fields(1);
+  fields[TypeFunc::Parms + 0] = TypeInt::INT;
+  const TypeTuple* range = TypeTuple::make(TypeFunc::Parms + 1, fields);
+  return TypeFunc::make(domain, range);
+}
+
 static const TypeFunc* make_base64_decodeBlock_Type() {
   int argcnt = 7;
 
@@ -2284,6 +2303,7 @@ void OptoRuntime::initialize_types() {
   _base64_encodeBlock_Type            = make_base64_encodeBlock_Type();
   _base64_decodeBlock_Type            = make_base64_decodeBlock_Type();
   _string_IndexOf_Type                = make_string_IndexOf_Type();
+  _stringCaseConvert_Type             = make_stringCaseConvert_Type();
   _poly1305_processBlocks_Type        = make_poly1305_processBlocks_Type();
   _intpoly_montgomeryMult_P256_Type   = make_intpoly_montgomeryMult_P256_Type();
   _intpoly_assign_Type                = make_intpoly_assign_Type();

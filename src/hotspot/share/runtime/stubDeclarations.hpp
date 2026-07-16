@@ -783,6 +783,18 @@
   do_stub(compiler, bigIntegerLeftShiftWorker)                          \
   do_entry(compiler, bigIntegerLeftShiftWorker,                         \
            bigIntegerLeftShiftWorker, bigIntegerLeftShift)              \
+  do_stub(compiler, string_case_latin1_lower)                           \
+  do_entry(compiler, string_case_latin1_lower,                          \
+           string_case_latin1_lower, string_case_latin1_lower)          \
+  do_stub(compiler, string_case_latin1_upper)                           \
+  do_entry(compiler, string_case_latin1_upper,                          \
+           string_case_latin1_upper, string_case_latin1_upper)          \
+  do_stub(compiler, string_case_utf16_lower)                            \
+  do_entry(compiler, string_case_utf16_lower,                           \
+           string_case_utf16_lower, string_case_utf16_lower)            \
+  do_stub(compiler, string_case_utf16_upper)                            \
+  do_entry(compiler, string_case_utf16_upper,                           \
+           string_case_utf16_upper, string_case_utf16_upper)            \
   /* merge in stubs and entries declared in arch header */              \
   STUBGEN_COMPILER_BLOBS_ARCH_DO(do_stub,  do_arch_blob,                \
                                      do_arch_entry, do_arch_entry_init) \
