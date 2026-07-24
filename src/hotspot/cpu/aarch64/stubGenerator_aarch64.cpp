@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2003, 2025, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2025, Red Hat Inc. All rights reserved.
+ * Copyright 2026 Arm Limited and/or its affiliates.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -7973,6 +7974,44 @@ class StubGenerator: public StubCodeGenerator {
     return start;
   }
 
+  /**
+   *  Arguments:
+   *
+   *  Input:
+   *    c_rarg0   - obja     address
+   *    c_rarg1   - objb     address
+   *    c_rarg2   - length   length
+   *    c_rarg3   - scale    log2_array_indxscale
+   *
+   *  Output:
+   *         r0   - int >= 0 mismatched index, < 0 bitwise complement of tail
+   */
+  address generate_vectorizedMismatch() {
+    __ align(CodeEntryAlignment);
+    StubGenStubId stub_id = StubGenStubId::vectorizedMismatch_id;
+    StubCodeMark mark(this, stub_id);
+    address start = __ pc();
+
+    const Register obja = c_rarg0;
+    const Register objb = c_rarg1;
+    const Register length = c_rarg2;
+    const Register scale = c_rarg3;
+    const Register tmp = r4;
+    const FloatRegister ztmp1 = z0;
+    const FloatRegister ztmp2 = z1;
+    const PRegister pgtmp = p0;
+    const PRegister ptmp = p8;
+    const Register result = r0; // return value
+
+    BLOCK_COMMENT("Entry:");
+    __ enter();
+    __ vectorized_mismatch(obja, objb, length, scale, result, tmp, ztmp1, ztmp2, pgtmp, ptmp);
+    __ leave();
+    __ ret(lr);
+
+    return start;
+  }
+
   address generate_squareToLen() {
     // squareToLen algorithm for sizes 1..127 described in java code works
     // faster than multiply_to_len on some CPUs and slower on others, but
@@ -13448,6 +13487,10 @@ class StubGenerator: public StubCodeGenerator {
     StubRoutines::_method_entry_barrier = generate_method_entry_barrier();
 
     StubRoutines::aarch64::_spin_wait = generate_spin_wait();
+
+    if (UseVectorizedMismatchIntrinsic) {
+      StubRoutines::_vectorizedMismatch = generate_vectorizedMismatch();
+    }
 
     StubRoutines::_upcall_stub_exception_handler = generate_upcall_stub_exception_handler();
     StubRoutines::_upcall_stub_load_target = generate_upcall_stub_load_target();
