@@ -197,6 +197,7 @@ class OptoRuntime : public AllStatic {
   static const TypeFunc* _base64_decodeBlock_Type;
   static const TypeFunc* _string_IndexOf_Type;
   static const TypeFunc* _stringCaseConvert_Type;
+  static const TypeFunc* _string_equals_ignore_case_Type;
   static const TypeFunc* _poly1305_processBlocks_Type;
   static const TypeFunc* _intpoly_montgomeryMult_P256_Type;
   static const TypeFunc* _intpoly_assign_Type;
@@ -679,6 +680,12 @@ private:
   static inline const TypeFunc* stringCaseConvert_Type() {
     assert(_stringCaseConvert_Type != nullptr, "should be initialized");
     return _stringCaseConvert_Type;
+  }
+
+  // String case-insensitive comparison function
+  static inline const TypeFunc* string_equals_ignore_case_Type() {
+    assert(_string_equals_ignore_case_Type != nullptr, "should be initialized");
+    return _string_equals_ignore_case_Type;
   }
 
   // Poly1305 processMultipleBlocks function

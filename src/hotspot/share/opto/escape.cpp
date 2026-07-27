@@ -2231,6 +2231,9 @@ void ConnectionGraph::process_call_arguments(CallNode *call) {
                   strcmp(call->as_CallLeaf()->_name, "vectorizedMismatch") == 0 ||
                   strcmp(call->as_CallLeaf()->_name, "stringIndexOf") == 0 ||
                   strcmp(call->as_CallLeaf()->_name, "stringCaseConvert") == 0 ||
+                  strcmp(call->as_CallLeaf()->_name, "stringEqualsIgnoreCaseLL") == 0 ||
+                  strcmp(call->as_CallLeaf()->_name, "stringEqualsIgnoreCaseLU") == 0 ||
+                  strcmp(call->as_CallLeaf()->_name, "stringEqualsIgnoreCaseUU") == 0 ||
                   strcmp(call->as_CallLeaf()->_name, "arraysort_stub") == 0 ||
                   strcmp(call->as_CallLeaf()->_name, "array_partition_stub") == 0 ||
                   strcmp(call->as_CallLeaf()->_name, "get_class_id_intrinsic") == 0 ||

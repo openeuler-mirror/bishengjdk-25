@@ -41,6 +41,8 @@ import jdk.internal.vm.annotation.IntrinsicCandidate;
 import static java.lang.String.UTF16;
 
 final class StringUTF16 {
+    private static final int CI_MATCH = -1;
+    private static final int CI_MISMATCH = -2;
 
     // Return a new byte array for a UTF16-coded string for len chars
     // Throw an exception if out of range
@@ -936,7 +938,27 @@ final class StringUTF16 {
 
     public static boolean regionMatchesCI(byte[] value, int toffset,
                                           byte[] other, int ooffset, int len) {
-        return compareToCIImpl(value, toffset, len, other, ooffset, len) == 0;
+        if (!String.STRING_EQUALS_IGNORE_CASE_INTRINSICS) {
+            return compareToCIImpl(value, toffset, len,
+                    other, ooffset, len) == 0;
+        }
+        int result = regionMatchesCIResult(value, toffset, other, ooffset, len);
+        if (result == CI_MATCH) {
+            return true;
+        }
+        if (result == CI_MISMATCH) {
+            return false;
+        }
+        assert result >= 0 && result <= len;
+        return compareToCIImpl(value, toffset + result, len - result,
+                other, ooffset + result, len - result) == 0;
+    }
+
+    @IntrinsicCandidate
+    private static int regionMatchesCIResult(byte[] value, int toffset,
+                                             byte[] other, int ooffset, int len) {
+        return compareToCIImpl(value, toffset, len, other, ooffset, len) == 0
+                ? CI_MATCH : CI_MISMATCH;
     }
 
     public static boolean regionMatchesCI_Latin1(byte[] value, int toffset,
