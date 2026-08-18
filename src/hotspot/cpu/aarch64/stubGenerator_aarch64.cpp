@@ -62,6 +62,7 @@
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/intpow.hpp"
+#include "utilities/ostream.hpp"
 #include "utilities/powerOfTwo.hpp"
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
@@ -87,6 +88,59 @@
 
 // Stub Code definitions
 
+#define AARCH64_OPTIMIZATION_HITS(DO)       \
+  DO(vectorized_hashcode_neon_latin1)       \
+  DO(vectorized_hashcode_neon_byte)         \
+  DO(vectorized_hashcode_neon_char_utf16)   \
+  DO(vectorized_hashcode_neon_int)          \
+  DO(vectorized_hashcode_neon_short)        \
+  DO(vectorized_hashcode_sve2_latin1)       \
+  DO(vectorized_hashcode_sve2_byte)         \
+  DO(vectorized_hashcode_sve2_char_utf16)   \
+  DO(vectorized_hashcode_sve2_short)        \
+  DO(forward_arraycopy_prefetch)            \
+  DO(sve_small_block_zeroing)               \
+  DO(string_case_latin1_lower)              \
+  DO(string_case_latin1_upper)              \
+  DO(string_case_utf16_lower)               \
+  DO(string_case_utf16_upper)               \
+  DO(vectorized_mismatch)                   \
+  DO(string_equals_ignore_case_ll)          \
+  DO(string_equals_ignore_case_lu)          \
+  DO(string_equals_ignore_case_uu)
+
+enum OptimizationId {
+#define DECLARE_OPTIMIZATION_ID(name) name,
+  AARCH64_OPTIMIZATION_HITS(DECLARE_OPTIMIZATION_ID)
+#undef DECLARE_OPTIMIZATION_ID
+  number_of_optimization_ids
+};
+
+static const char* const optimization_names[] = {
+#define DECLARE_OPTIMIZATION_NAME(name) #name,
+  AARCH64_OPTIMIZATION_HITS(DECLARE_OPTIMIZATION_NAME)
+#undef DECLARE_OPTIMIZATION_NAME
+};
+
+#undef AARCH64_OPTIMIZATION_HITS
+
+STATIC_ASSERT(ARRAY_SIZE(optimization_names) == number_of_optimization_ids);
+STATIC_ASSERT(number_of_optimization_ids <= 64);
+
+static volatile uint64_t optimization_hit_mask = 0;
+static address optimization_hit_reporter = nullptr;
+
+static void report_optimization_hit(int id) {
+  assert(id >= 0 && id < number_of_optimization_ids,
+         "invalid optimization id");
+  const uint64_t bit = UCONST64(1) << id;
+  const uint64_t old_mask = Atomic::fetch_then_or(&optimization_hit_mask, bit);
+  if ((old_mask & bit) == 0) {
+    ttyLocker ttyl;
+    tty->print_cr("AArch64 optimization hit: %s", optimization_names[id]);
+  }
+}
+
 class StubGenerator: public StubCodeGenerator {
  private:
 
@@ -100,6 +154,67 @@ class StubGenerator: public StubCodeGenerator {
   BLOCK_COMMENT("inc_counter " #counter); \
   inc_counter_np_(counter);
 #endif
+
+  // The diagnostic hit-recording code is emitted only when requested at VM
+  // startup, so the normal path has no extra instructions. After the first
+  // hit, the generated code only loads the shared hit mask and tests its bit.
+  // The shared reporter preserves the complete register state after entry.
+  // Preserve r17 around the hit-mask check, and preserve r16 and lr around the
+  // reporter call, because this code runs outside the target stub's clobber set.
+  void record_optimization_hit(OptimizationId id) {
+    if (PrintAArch64OptimizationHits) {
+      Label done;
+      uint64_t offset;
+
+      __ str(r17, Address(__ pre(sp, -2 * wordSize)));
+      __ adrp(r17, ExternalAddress(reinterpret_cast<address>(
+          const_cast<uint64_t*>(&optimization_hit_mask))), offset);
+      __ ldr(r17, Address(r17, offset));
+      __ tbnz(r17, id, done);
+
+      assert(optimization_hit_reporter != nullptr,
+             "optimization hit reporter must be generated first");
+      __ stp(r16, lr, Address(__ pre(sp, -2 * wordSize)));
+      __ movw(r17, id);
+      __ mov(r16, optimization_hit_reporter);
+      __ blr(r16);
+      __ ldp(r16, lr, Address(__ post(sp, 2 * wordSize)));
+
+      __ bind(done);
+      __ ldr(r17, Address(__ post(sp, 2 * wordSize)));
+    }
+  }
+
+  address generate_optimization_hit_reporter() {
+    const bool use_sve = UseSVE > 0;
+    const int sve_vector_size_in_bytes = use_sve
+        ? VM_Version::get_initial_sve_vector_length()
+        : 0;
+    const int total_predicate_in_bytes = use_sve
+        ? (sve_vector_size_in_bytes >> LogBitsPerByte) *
+              PRegister::number_of_registers
+        : 0;
+
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "aarch64_optimization_hit_reporter");
+    address start = __ pc();
+
+    __ enter();
+    __ get_nzcv(r16);
+    // Some callers expose only the target stub's narrow clobber set to C2.
+    // Preserve the full machine state before making the broader native call.
+    __ push_CPU_state(true, use_sve, sve_vector_size_in_bytes,
+                      total_predicate_in_bytes);
+    __ movw(c_rarg0, r17);
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, report_optimization_hit), 1);
+    __ pop_CPU_state(true, use_sve, sve_vector_size_in_bytes,
+                     total_predicate_in_bytes);
+    __ set_nzcv(r16);
+    __ leave();
+    __ ret(lr);
+
+    return start;
+  }
 
   // Call stubs are used to call Java from C
   //
@@ -682,6 +797,10 @@ class StubGenerator: public StubCodeGenerator {
       __ br(Assembler::HI, fallback);
     }
 
+    // Record only ranges accepted by the SVE path, not calls that branch to
+    // the regular zero_blocks implementation.
+    record_optimization_hit(sve_small_block_zeroing);
+
     __ sve_dup(v0, Assembler::D, 0);
     __ mov(idx, zr);
     __ andr(full_end, cnt, -vl_words);
@@ -1250,6 +1369,7 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, "StubRoutines", "forward_copy_longs_pf");
 
     __ bind(start);
+    record_optimization_hit(forward_arraycopy_prefetch);
 
 #ifdef ASSERT
     // Make sure we are never given < 8 words.
@@ -7996,6 +8116,8 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, stub_id);
     address start = __ pc();
 
+    record_optimization_hit(vectorized_mismatch);
+
     const Register obja = c_rarg0;
     const Register objb = c_rarg1;
     const Register length = c_rarg2;
@@ -8707,21 +8829,27 @@ class StubGenerator: public StubCodeGenerator {
     __ align(CodeEntryAlignment);
 
     StubGenStubId stub_id;
+    OptimizationId optimization_id = number_of_optimization_ids;
     switch (eltype) {
     case T_BOOLEAN:
       stub_id = StubGenStubId::large_arrays_hashcode_boolean_id;
+      optimization_id = vectorized_hashcode_neon_latin1;
       break;
     case T_BYTE:
       stub_id = StubGenStubId::large_arrays_hashcode_byte_id;
+      optimization_id = vectorized_hashcode_neon_byte;
       break;
     case T_CHAR:
       stub_id = StubGenStubId::large_arrays_hashcode_char_id;
+      optimization_id = vectorized_hashcode_neon_char_utf16;
       break;
     case T_SHORT:
       stub_id = StubGenStubId::large_arrays_hashcode_short_id;
+      optimization_id = vectorized_hashcode_neon_short;
       break;
     case T_INT:
       stub_id = StubGenStubId::large_arrays_hashcode_int_id;
+      optimization_id = vectorized_hashcode_neon_int;
       break;
     default:
       stub_id = StubGenStubId::NO_STUBID;
@@ -8731,6 +8859,7 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, stub_id);
 
     address entry = __ pc();
+    record_optimization_hit(optimization_id);
     __ enter();
 
     // Put 0-3'th powers of 31 into a single SIMD register together. The register will be used in
@@ -9006,18 +9135,23 @@ class StubGenerator: public StubCodeGenerator {
     __ align(CodeEntryAlignment);
 
     StubGenStubId stub_id;
+    OptimizationId optimization_id = number_of_optimization_ids;
     switch (eltype) {
     case T_BOOLEAN:
       stub_id = StubGenStubId::large_arrays_hashcode_sve2_boolean_id;
+      optimization_id = vectorized_hashcode_sve2_latin1;
       break;
     case T_BYTE:
       stub_id = StubGenStubId::large_arrays_hashcode_sve2_byte_id;
+      optimization_id = vectorized_hashcode_sve2_byte;
       break;
     case T_CHAR:
       stub_id = StubGenStubId::large_arrays_hashcode_sve2_char_id;
+      optimization_id = vectorized_hashcode_sve2_char_utf16;
       break;
     case T_SHORT:
       stub_id = StubGenStubId::large_arrays_hashcode_sve2_short_id;
+      optimization_id = vectorized_hashcode_sve2_short;
       break;
     default:
       stub_id = StubGenStubId::NO_STUBID;
@@ -9027,6 +9161,7 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, stub_id);
 
     address entry = __ pc();
+    record_optimization_hit(optimization_id);
     __ enter();
     __ sve_ptrue(pload, is_byte ? Assembler::B : Assembler::H);
     __ sve_ptrue(pwords, Assembler::S);
@@ -10952,15 +11087,19 @@ class StubGenerator: public StubCodeGenerator {
   // NZCV while preserving p7.
   address generate_string_equals_ignore_case(string_compare_mode mode) {
     StubGenStubId stub_id;
+    OptimizationId optimization_id = number_of_optimization_ids;
     switch (mode) {
       case LL:
         stub_id = StubGenStubId::string_equals_ignore_case_ll_id;
+        optimization_id = string_equals_ignore_case_ll;
         break;
       case LU:
         stub_id = StubGenStubId::string_equals_ignore_case_lu_id;
+        optimization_id = string_equals_ignore_case_lu;
         break;
       case UU:
         stub_id = StubGenStubId::string_equals_ignore_case_uu_id;
+        optimization_id = string_equals_ignore_case_uu;
         break;
       default:
         ShouldNotReachHere();
@@ -10969,6 +11108,8 @@ class StubGenerator: public StubCodeGenerator {
     __ align(CodeEntryAlignment);
     StubCodeMark mark(this, stub_id);
     address entry = __ pc();
+
+    record_optimization_hit(optimization_id);
 
     if (mode == UU) {
       emit_string_equals_ignore_case_sve_uu();
@@ -11829,6 +11970,11 @@ class StubGenerator: public StubCodeGenerator {
     __ align(CodeEntryAlignment);
     StubCodeMark mark(this, stub_id);
     address entry = __ pc();
+
+    const OptimizationId optimization_id = is_latin1
+        ? (to_lower ? string_case_latin1_lower : string_case_latin1_upper)
+        : (to_lower ? string_case_utf16_lower : string_case_utf16_upper);
+    record_optimization_hit(optimization_id);
 
     Register src = r0;
     Register dst = r1;
@@ -14325,6 +14471,10 @@ class StubGenerator: public StubCodeGenerator {
   // Initialization
   void generate_initial_stubs() {
     // Generate initial stubs and initializes the entry points
+
+    if (PrintAArch64OptimizationHits) {
+      optimization_hit_reporter = generate_optimization_hit_reporter();
+    }
 
     // entry points that exist in all platforms Note: This is code
     // that could be shared among different platforms - however the
