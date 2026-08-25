@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,16 +25,17 @@
 /*
  * @test
  * @summary Test AOT cache support for array classes in custom class loaders.
- * @bug 8353298 8356838
+ * @bug 8353298 8356838 8379819
  * @requires vm.cds.supports.aot.class.linking
  * @library /test/lib /test/hotspot/jtreg/runtime/cds/appcds/test-classes
  * @build ReturnIntegerAsString
  * @build AOTCacheSupportForCustomLoaders
+ * @compile test-classes/CustomLoadee.java
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar AppWithCustomLoaders AppWithCustomLoaders$MyLoader
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar cust.jar
  *                 AppWithCustomLoaders$MyLoadeeA AppWithCustomLoaders$MyLoadeeB
  *                 AppWithCustomLoaders$MyLoadeeC AppWithCustomLoaders$MyLoadeeD
- *                 ReturnIntegerAsString
+ *                 CustomLoadee ReturnIntegerAsString
  * @run driver AOTCacheSupportForCustomLoaders AOT
  */
 
@@ -63,6 +64,7 @@ public class AOTCacheSupportForCustomLoaders {
         SimpleCDSAppTester.of("AOTCacheSupportForCustomLoaders")
             .classpath("app.jar")
             .addVmArgs("-Xlog:aot+class=debug", "-Xlog:aot", "-Xlog:cds",
+                       "-Xlog:aot+training+data",
                        "--module-path=" + modulePath,
                        "--add-modules=com.test")
             .appCommandLine("AppWithCustomLoaders", modulePath)
@@ -77,7 +79,8 @@ public class AOTCacheSupportForCustomLoaders {
                        .shouldMatch(",class.*array \\[LAppWithCustomLoaders[$]MyLoadeeA;")
                        .shouldNotMatch("class.*unreg.*MyLoadeeC") // not from "file:" code source
                        .shouldNotMatch("class.*unreg.*MyLoadeeD") // parent is not from "file:" code source
-                       .shouldNotMatch(",class.* ReturnIntegerAsString");
+                       .shouldNotMatch(",class.* ReturnIntegerAsString")
+                       .shouldNotMatch("aot,training,data.*CustomLoadee");
                 })
             .setProductionChecker((OutputAnalyzer out) -> {
                     out.shouldContain("Using AOT-linked classes: true");
@@ -98,6 +101,7 @@ class AppWithCustomLoaders {
         test2(loader);
         test3(args[0]);
         test4(loader);
+        test5();
 
         // TODO: more test cases JDK-8354557
     }
@@ -167,6 +171,31 @@ class AppWithCustomLoaders {
         if (d.getSuperclass() != c) {
             throw new RuntimeException("MyLoadeeC should be super class of MyLoadeeD");
         }
+    }
+
+    // Test 5 -- TrainingData interaction with custom class loaders.
+    static void test5() throws Exception {
+        // Do this several times. The AOT cache should contain only one
+        // copy of CustomLoadee as an "unregistered" class, which will be
+        // used in the first iteration of this loop.
+        //
+        // The JVM should work well even if the cached version of CustomLoadee
+        // has been unloaded.
+        for (int i = 0; i < 4; i++) {
+            test5Inner();
+            System.gc(); // trigger unloading of CustomLoadee.
+        }
+    }
+
+    static void test5Inner() throws Exception {
+        // Load a class and run a loop to make sure it's compiled, but
+        // TrainingData should not record any class/method that are loaded
+        // by custom class loaders
+        File custJar = new File("cust.jar");
+        URL[] urls = new URL[] {custJar.toURI().toURL()};
+        URLClassLoader loader = new URLClassLoader(urls, AppWithCustomLoaders.class.getClassLoader());
+        Class<?> c = loader.loadClass("CustomLoadee");
+        System.out.println(c.newInstance());
     }
 
     public static class MyLoader extends URLClassLoader {

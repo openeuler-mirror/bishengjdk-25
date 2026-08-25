@@ -424,6 +424,8 @@ private:
   static TrainingData* lookup_archived_training_data(const Key* k);
 #endif
 
+  static void cleanup_after_redefinition();
+
   template<typename TrainingDataType, typename... ArgTypes>
   static TrainingDataType* allocate(ArgTypes... args) {
     assert(need_data() || have_data(), "");
