@@ -217,6 +217,20 @@ DumpTimeClassInfo* SystemDictionaryShared::get_info_locked(InstanceKlass* k) {
   return info;
 }
 
+void SystemDictionaryShared::check_code_source(InstanceKlass* ik, const ClassFileStream* cfs) {
+  if (CDSConfig::is_dumping_preimage_static_archive() && !is_builtin_loader(ik->class_loader_data())) {
+    if (cfs == nullptr || cfs->source() == nullptr || strncmp(cfs->source(), "file:", 5) != 0) {
+      // AOT cache filtering:
+      // For non-built-in loaders, cache only the classes that have a file: code source, so
+      // we can avoid caching dynamically generated classes that are likely to change from
+      // run to run. This is similar to the filtering in ClassListWriter::write_to_stream()
+      // for the classic CDS static archive.
+      warn_excluded(ik, "Not loaded from \"file:\" code source");
+      set_excluded(ik);
+    }
+  }
+}
+
 bool SystemDictionaryShared::check_for_exclusion(InstanceKlass* k, DumpTimeClassInfo* info) {
   if (CDSConfig::is_dumping_dynamic_archive() && MetaspaceShared::is_in_shared_metaspace(k)) {
     // We have reached a super type that's already in the base archive. Treat it
