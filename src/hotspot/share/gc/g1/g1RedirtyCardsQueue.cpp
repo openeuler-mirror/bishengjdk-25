@@ -28,6 +28,7 @@
 #include "utilities/debug.hpp"
 #include "utilities/macros.hpp"
 
+#ifndef AARCH64
 // G1RedirtyCardsLocalQueueSet
 
 G1RedirtyCardsLocalQueueSet::G1RedirtyCardsLocalQueueSet(G1RedirtyCardsQueueSet* shared_qset) :
@@ -146,3 +147,4 @@ void G1RedirtyCardsQueueSet::add_bufferlist(const BufferNodeList& buffers) {
     update_tail(buffers._tail);
   }
 }
+#endif // !AARCH64

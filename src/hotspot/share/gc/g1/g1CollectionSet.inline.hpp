@@ -31,8 +31,13 @@
 
 template <class CardOrRangeVisitor>
 inline void G1CollectionSet::merge_cardsets_for_collection_groups(CardOrRangeVisitor& cl, uint worker_id, uint num_workers) {
+#ifdef AARCH64
+  uint length = groups_increment_length();
+  uint offset =  _groups_inc_part_start;
+#else // AARCH64
   uint length = collection_groups_increment_length();
   uint offset =  _selected_groups_inc_part_start;
+#endif // AARCH64
   if (length == 0) {
     return;
   }
@@ -41,7 +46,11 @@ inline void G1CollectionSet::merge_cardsets_for_collection_groups(CardOrRangeVis
   uint cur_pos = start_pos;
   uint count = 0;
   do {
+#ifdef AARCH64
+    G1HeapRegionRemSet::iterate_for_merge(_groups.at(offset + cur_pos)->card_set(), cl);
+#else // AARCH64
     G1HeapRegionRemSet::iterate_for_merge(collection_set_groups()->at(offset + cur_pos)->card_set(), cl);
+#endif // AARCH64
     cur_pos++;
     count++;
     if (cur_pos == length) {

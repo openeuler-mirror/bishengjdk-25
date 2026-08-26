@@ -41,6 +41,9 @@ import static java.lang.String.checkIndex;
 import static java.lang.String.checkOffset;
 
 final class StringLatin1 {
+    private static final int CI_MATCH = -1;
+    private static final int CI_MISMATCH = -2;
+
     public static char charAt(byte[] value, int index) {
         checkIndex(index, value.length);
         return (char)(value[index] & 0xff);
@@ -379,6 +382,30 @@ final class StringLatin1 {
     // case insensitive
     public static boolean regionMatchesCI(byte[] value, int toffset,
                                           byte[] other, int ooffset, int len) {
+        if (!String.STRING_EQUALS_IGNORE_CASE_INTRINSICS) {
+            return regionMatchesCIScalar(value, toffset, other, ooffset, len);
+        }
+        int result = regionMatchesCIResult(value, toffset, other, ooffset, len);
+        if (result == CI_MATCH) {
+            return true;
+        }
+        if (result == CI_MISMATCH) {
+            return false;
+        }
+        assert result >= 0 && result <= len;
+        return regionMatchesCIScalar(value, toffset + result,
+                other, ooffset + result, len - result);
+    }
+
+    @IntrinsicCandidate
+    private static int regionMatchesCIResult(byte[] value, int toffset,
+                                             byte[] other, int ooffset, int len) {
+        return regionMatchesCIScalar(value, toffset, other, ooffset, len)
+                ? CI_MATCH : CI_MISMATCH;
+    }
+
+    private static boolean regionMatchesCIScalar(byte[] value, int toffset,
+                                                 byte[] other, int ooffset, int len) {
         int last = toffset + len;
         while (toffset < last) {
             byte b1 = value[toffset++];
@@ -393,6 +420,33 @@ final class StringLatin1 {
 
     public static boolean regionMatchesCI_UTF16(byte[] value, int toffset,
                                                 byte[] other, int ooffset, int len) {
+        if (!String.STRING_EQUALS_IGNORE_CASE_INTRINSICS) {
+            return regionMatchesCI_UTF16Scalar(value, toffset,
+                    other, ooffset, len);
+        }
+        int result = regionMatchesCI_UTF16Result(value, toffset, other, ooffset, len);
+        if (result == CI_MATCH) {
+            return true;
+        }
+        if (result == CI_MISMATCH) {
+            return false;
+        }
+        assert result >= 0 && result <= len;
+        return regionMatchesCI_UTF16Scalar(value, toffset + result,
+                other, ooffset + result, len - result);
+    }
+
+    @IntrinsicCandidate
+    private static int regionMatchesCI_UTF16Result(byte[] value, int toffset,
+                                                   byte[] other, int ooffset,
+                                                   int len) {
+        return regionMatchesCI_UTF16Scalar(value, toffset, other, ooffset, len)
+                ? CI_MATCH : CI_MISMATCH;
+    }
+
+    private static boolean regionMatchesCI_UTF16Scalar(byte[] value, int toffset,
+                                                       byte[] other, int ooffset,
+                                                       int len) {
         int last = toffset + len;
         while (toffset < last) {
             char c1 = (char)(value[toffset++] & 0xff);
@@ -434,10 +488,23 @@ final class StringLatin1 {
         byte[] result = new byte[len];
         System.arraycopy(value, 0, result, 0, first);  // Just copy the first few
                                                        // lowerCase characters.
-        for (int i = first; i < len; i++) {
+        int processed = first;
+        if (String.STRING_CASE_INTRINSICS) {
+            processed = toLowerCaseSimple(value, result, first, len);
+        }
+        for (int i = processed; i < len; i++) {
             result[i] = (byte)CharacterDataLatin1.instance.toLowerCase(value[i] & 0xff);
         }
         return new String(result, LATIN1);
+    }
+
+    // All Latin1 lowercase mappings are one-to-one and remain Latin1.
+    @IntrinsicCandidate
+    private static int toLowerCaseSimple(byte[] value, byte[] result, int first, int len) {
+        for (int i = first; i < len; i++) {
+            result[i] = (byte)CharacterDataLatin1.instance.toLowerCase(value[i] & 0xff);
+        }
+        return len;
     }
 
     private static String toLowerCaseEx(String str, byte[] value,
@@ -505,7 +572,11 @@ final class StringLatin1 {
         byte[] result = new byte[len];
         System.arraycopy(value, 0, result, 0, first);  // Just copy the first few
                                                        // upperCase characters.
-        for (int i = first; i < len; i++) {
+        int processed = first;
+        if (String.STRING_CASE_INTRINSICS) {
+            processed = toUpperCaseSimple(value, result, first, len);
+        }
+        for (int i = processed; i < len; i++) {
             int cp = CharacterDataLatin1.instance.toUpperCaseEx(value[i] & 0xff);
             if (!canEncode(cp)) {                      // not a latin1 character
                 return toUpperCaseEx(str, value, first, locale, false);
@@ -513,6 +584,19 @@ final class StringLatin1 {
             result[i] = (byte)cp;
         }
         return new String(result, LATIN1);
+    }
+
+    // Return before mappings that expand or produce a non-Latin1 character.
+    @IntrinsicCandidate
+    private static int toUpperCaseSimple(byte[] value, byte[] result, int first, int len) {
+        for (int i = first; i < len; i++) {
+            int cp = CharacterDataLatin1.instance.toUpperCaseEx(value[i] & 0xff);
+            if (!canEncode(cp)) {
+                return i;
+            }
+            result[i] = (byte)cp;
+        }
+        return len;
     }
 
     private static String toUpperCaseEx(String str, byte[] value,

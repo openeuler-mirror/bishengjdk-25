@@ -22,8 +22,10 @@
  *
  */
 
+#ifndef AARCH64
 #include "gc/g1/g1ConcurrentRefine.hpp"
 #include "gc/g1/g1DirtyCardQueue.hpp"
+#endif // !AARCH64
 #include "gc/g1/g1FromCardCache.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "memory/padded.inline.hpp"
@@ -80,7 +82,11 @@ void G1FromCardCache::print(outputStream* out) {
 #endif
 
 uint G1FromCardCache::num_par_rem_sets() {
+#ifdef AARCH64
+  return G1ConcRefinementThreads + ConcGCThreads;
+#else // AARCH64
   return G1DirtyCardQueueSet::num_par_ids() + G1ConcRefinementThreads + MAX2(ConcGCThreads, ParallelGCThreads);
+#endif // AARCH64
 }
 
 void G1FromCardCache::clear(uint region_idx) {

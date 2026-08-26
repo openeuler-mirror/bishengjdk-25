@@ -243,6 +243,8 @@ private:
 
 private:
   STUBGEN_ENTRIES_DO(DECLARE_ENTRY_FIELD, DECLARE_ENTRY_FIELD_INIT, DECLARE_ENTRY_FIELD_ARRAY);
+  static int _string_case_intrinsic_min_length;
+  static int _string_equals_ignore_case_min_length;
 
 #undef DECLARE_ENTRY_FIELD_ARRAY
 #undef DECLARE_ENTRY_FIELD_INIT
@@ -264,6 +266,12 @@ private:
 
 public:
   STUBGEN_ENTRIES_DO(DEFINE_ENTRY_GETTER, DEFINE_ENTRY_GETTER_INIT, DEFINE_ENTRY_GETTER_ARRAY);
+  static int string_case_intrinsic_min_length() {
+    return _string_case_intrinsic_min_length;
+  }
+  static int string_equals_ignore_case_min_length() {
+    return _string_equals_ignore_case_min_length;
+  }
 
 #undef DEFINE_ENTRY_GETTER_ARRAY
 #undef DEFINE_ENTRY_GETTER_INIT

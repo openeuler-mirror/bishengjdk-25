@@ -28,6 +28,9 @@
 #include "cds/classListWriter.hpp"
 #include "cds/filemap.hpp"
 #include "cds/heapShared.hpp"
+#ifdef AARCH64
+#include "classfile/bytecodeEnhancement.hpp"
+#endif
 #include "classfile/classLoaderDataShared.hpp"
 #include "classfile/moduleEntry.hpp"
 #include "include/jvm_io.h"
@@ -105,6 +108,23 @@ void CDSConfig::ergo_initialize() {
       ergo_init_classic_archive_paths();
     }
   }
+
+#ifdef AARCH64
+  if (BytecodeEnhancement::is_enabled()) {
+    if (new_aot_flags_used() && (is_using_archive() || is_dumping_archive())) {
+      vm_exit_during_initialization("BytecodeEnhancement is not supported while creating or using a Leyden AOT cache");
+    }
+    if (is_dumping_static_archive()) {
+      disable_heap_dumping();
+    }
+    if (is_dumping_archive()) {
+      stop_dumping_full_module_graph("BytecodeEnhancement is configured");
+    }
+    if (is_using_archive()) {
+      stop_using_full_module_graph("BytecodeEnhancement is configured");
+    }
+  }
+#endif
 
   if (!is_dumping_heap()) {
     _is_dumping_full_module_graph = false;

@@ -1538,7 +1538,11 @@ public:
            vpowm  == v13, "registers must match aarch64.ad"); \
   } while (0)
 
-  void string_equals(Register a1, Register a2, Register result, Register cnt1);
+  void string_equals(Register a1, Register a2, Register result, Register cnt1,
+                     int elem_size);
+  address string_equals(Register a1, Register a2, Register result, Register cnt1,
+                        int elem_size, bool use_array_equals_stub,
+                        Register stub_a2, Register stub_cnt);
 
   void fill_words(Register base, Register cnt, Register value);
   address zero_words(Register base, uint64_t cnt);
@@ -1758,6 +1762,12 @@ public:
 
   // Code for java.lang.Thread::onSpinWait() intrinsic.
   void spin_wait();
+
+  // Code for ArraysSupport::vectorizedMismatch() intrinsic
+  void vectorized_mismatch(Register obja, Register objb, Register length,
+                           Register log2_array_indxscale, Register result, Register tmp,
+                           FloatRegister vtmp1, FloatRegister vtmp2, PRegister pgtmp,
+                           PRegister ptmp);
 
   void lightweight_lock(Register basic_lock, Register obj, Register t1, Register t2, Register t3, Label& slow);
   void lightweight_unlock(Register obj, Register t1, Register t2, Register t3, Label& slow);

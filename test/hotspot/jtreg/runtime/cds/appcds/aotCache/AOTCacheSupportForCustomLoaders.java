@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,13 +25,17 @@
 /*
  * @test
  * @summary Test AOT cache support for array classes in custom class loaders.
- * @bug 8353298 8356838
+ * @bug 8353298 8356838 8379819
  * @requires vm.cds.supports.aot.class.linking
  * @library /test/lib /test/hotspot/jtreg/runtime/cds/appcds/test-classes
  * @build ReturnIntegerAsString
  * @build AOTCacheSupportForCustomLoaders
+ * @compile test-classes/CustomLoadee.java
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar AppWithCustomLoaders AppWithCustomLoaders$MyLoader
- * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar cust.jar AppWithCustomLoaders$MyLoadeeA AppWithCustomLoaders$MyLoadeeB ReturnIntegerAsString
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar cust.jar
+ *                 AppWithCustomLoaders$MyLoadeeA AppWithCustomLoaders$MyLoadeeB
+ *                 AppWithCustomLoaders$MyLoadeeC AppWithCustomLoaders$MyLoadeeD
+ *                 CustomLoadee ReturnIntegerAsString
  * @run driver AOTCacheSupportForCustomLoaders AOT
  */
 
@@ -40,6 +44,7 @@ import java.lang.module.ModuleFinder;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Set;
@@ -59,14 +64,23 @@ public class AOTCacheSupportForCustomLoaders {
         SimpleCDSAppTester.of("AOTCacheSupportForCustomLoaders")
             .classpath("app.jar")
             .addVmArgs("-Xlog:aot+class=debug", "-Xlog:aot", "-Xlog:cds",
+                       "-Xlog:aot+training+data",
                        "--module-path=" + modulePath,
                        "--add-modules=com.test")
             .appCommandLine("AppWithCustomLoaders", modulePath)
+            .setTrainingChecker((OutputAnalyzer out) -> {
+                    out.shouldContain("Skipping AppWithCustomLoaders$MyLoadeeC: Not loaded from \"file:\" code source")
+                       .shouldContain("Skipping AppWithCustomLoaders$MyLoadeeD: super class AppWithCustomLoaders$MyLoadeeC is excluded")
+                       .shouldContain("Skipping ReturnIntegerAsString: Failed verification");
+                })
             .setAssemblyChecker((OutputAnalyzer out) -> {
                     out.shouldMatch(",class.*unreg AppWithCustomLoaders[$]MyLoadeeA")
                        .shouldMatch(",class.*unreg com.test.Foo")
                        .shouldMatch(",class.*array \\[LAppWithCustomLoaders[$]MyLoadeeA;")
-                       .shouldNotMatch(",class.* ReturnIntegerAsString");
+                       .shouldNotMatch("class.*unreg.*MyLoadeeC") // not from "file:" code source
+                       .shouldNotMatch("class.*unreg.*MyLoadeeD") // parent is not from "file:" code source
+                       .shouldNotMatch(",class.* ReturnIntegerAsString")
+                       .shouldNotMatch("aot,training,data.*CustomLoadee");
                 })
             .setProductionChecker((OutputAnalyzer out) -> {
                     out.shouldContain("Using AOT-linked classes: true");
@@ -76,14 +90,18 @@ public class AOTCacheSupportForCustomLoaders {
 }
 
 class AppWithCustomLoaders {
+    static MyLoader loader; // keep alive
+
     public static void main(String args[]) throws Exception {
         File custJar = new File("cust.jar");
         URL[] urls = new URL[] {custJar.toURI().toURL()};
-        MyLoader loader = new MyLoader(urls, AppWithCustomLoaders.class.getClassLoader());
+        loader = new MyLoader(urls, AppWithCustomLoaders.class.getClassLoader());
 
         test1(loader);
         test2(loader);
         test3(args[0]);
+        test4(loader);
+        test5();
 
         // TODO: more test cases JDK-8354557
     }
@@ -141,9 +159,57 @@ class AppWithCustomLoaders {
         }
     }
 
+    // Test 4: classes that don't use file: code source should be excluded
+    static void test4(MyLoader loader) throws Exception {
+        Class<?> c = loader.loadLoadeeC();
+        Class<?> d = loader.loadClass("AppWithCustomLoaders$MyLoadeeD");
+
+        URL codeSource = c.getProtectionDomain().getCodeSource().getLocation();
+        if (codeSource != null) {
+            throw new RuntimeException("MyLoadeeC should have null CodeSource but got: " + codeSource);
+        }
+        if (d.getSuperclass() != c) {
+            throw new RuntimeException("MyLoadeeC should be super class of MyLoadeeD");
+        }
+    }
+
+    // Test 5 -- TrainingData interaction with custom class loaders.
+    static void test5() throws Exception {
+        // Do this several times. The AOT cache should contain only one
+        // copy of CustomLoadee as an "unregistered" class, which will be
+        // used in the first iteration of this loop.
+        //
+        // The JVM should work well even if the cached version of CustomLoadee
+        // has been unloaded.
+        for (int i = 0; i < 4; i++) {
+            test5Inner();
+            System.gc(); // trigger unloading of CustomLoadee.
+        }
+    }
+
+    static void test5Inner() throws Exception {
+        // Load a class and run a loop to make sure it's compiled, but
+        // TrainingData should not record any class/method that are loaded
+        // by custom class loaders
+        File custJar = new File("cust.jar");
+        URL[] urls = new URL[] {custJar.toURI().toURL()};
+        URLClassLoader loader = new URLClassLoader(urls, AppWithCustomLoaders.class.getClassLoader());
+        Class<?> c = loader.loadClass("CustomLoadee");
+        System.out.println(c.newInstance());
+    }
+
     public static class MyLoader extends URLClassLoader {
         public MyLoader(URL[] urls, ClassLoader parent) {
             super(urls, parent);
+        }
+
+        public Class<?> loadLoadeeC() throws Exception {
+            try (InputStream in = getResourceAsStream("AppWithCustomLoaders$MyLoadeeC.class")) {
+                byte[] bytes = in.readAllBytes();
+                // Define MyLoadeeC without specifying a ProtectionDomain. As a result, this
+                // class gets an empty ProtectionDomain whose CodeSource location is null.
+                return defineClass(bytes, 0, bytes.length);
+            }
         }
     }
 
@@ -174,4 +240,7 @@ class AppWithCustomLoaders {
     }
 
     public static class MyLoadeeB extends MyLoadeeA {}
+
+    public static class MyLoadeeC {}
+    public static class MyLoadeeD extends MyLoadeeC {}
 }

@@ -249,7 +249,11 @@ HeapWord* G1Allocator::survivor_attempt_allocation(uint node_index,
                                                                               desired_word_size,
                                                                               actual_word_size);
   if (result == nullptr && !survivor_is_full()) {
+#ifdef AARCH64
+    MutexLocker x(G1FreeList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
     MutexLocker x(FreeList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
     // Multiple threads may have queued at the FreeList_lock above after checking whether there
     // actually is still memory available. Redo the check under the lock to avoid unnecessary work;
     // the memory may have been used up as the threads waited to acquire the lock.
@@ -262,9 +266,12 @@ HeapWord* G1Allocator::survivor_attempt_allocation(uint node_index,
       }
     }
   }
+
+#ifndef AARCH64
   if (result != nullptr) {
     _g1h->dirty_young_block(result, *actual_word_size);
   }
+#endif // !AARCH64
   return result;
 }
 
@@ -278,7 +285,11 @@ HeapWord* G1Allocator::old_attempt_allocation(size_t min_word_size,
                                                                desired_word_size,
                                                                actual_word_size);
   if (result == nullptr && !old_is_full()) {
+#ifdef AARCH64
+    MutexLocker x(G1FreeList_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
     MutexLocker x(FreeList_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
     // Multiple threads may have queued at the FreeList_lock above after checking whether there
     // actually is still memory available. Redo the check under the lock to avoid unnecessary work;
     // the memory may have been used up as the threads waited to acquire the lock.

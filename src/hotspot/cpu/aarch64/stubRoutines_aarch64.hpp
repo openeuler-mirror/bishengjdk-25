@@ -101,6 +101,23 @@ private:
     return nullptr;
   }
 
+  static address large_arrays_hashcode_sve(BasicType eltype) {
+    switch (eltype) {
+    case T_BOOLEAN:
+      return large_arrays_hashcode_sve2_boolean();
+    case T_BYTE:
+      return large_arrays_hashcode_sve2_byte();
+    case T_CHAR:
+      return large_arrays_hashcode_sve2_char();
+    case T_SHORT:
+      return large_arrays_hashcode_sve2_short();
+    default:
+      ShouldNotReachHere();
+    }
+
+    return nullptr;
+  }
+
   static address pack_1_2_3_utf8_bytes_adr() {
     return (address) _pack_1_2_3_utf8_bytes;
   }

@@ -31,6 +31,9 @@
 #include "classfile/javaClasses.hpp"
 #include "classfile/systemDictionary.hpp"
 #include "classfile/vmClasses.hpp"
+#ifdef AARCH64
+#include "classfile/bytecodeEnhancement.hpp"
+#endif
 #include "classfile/vmSymbols.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "memory/metaspaceClosure.hpp"
@@ -197,6 +200,15 @@ void vmClasses::resolve_all(TRAPS) {
   _box_klasses[T_SHORT]   = vmClasses::Short_klass();
   _box_klasses[T_INT]     = vmClasses::Integer_klass();
   _box_klasses[T_LONG]    = vmClasses::Long_klass();
+
+#ifdef AARCH64
+  // Reject replacements that affect VM well-known classes or their type hierarchy
+  // while using or creating a CDS archive.
+  if (BytecodeEnhancement::is_enabled()
+      && (CDSConfig::is_using_archive() || CDSConfig::is_dumping_static_archive())) {
+    BytecodeEnhancement::validate_vm_class_replacements_for_cds();
+  }
+#endif
 
 #ifdef ASSERT
   if (CDSConfig::is_using_archive()) {

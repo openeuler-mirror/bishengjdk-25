@@ -42,6 +42,9 @@
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/handles.inline.hpp"
+#ifdef AARCH64
+#include "runtime/threads.hpp"
+#endif // AARCH64
 
 int G1HeapVerifier::_enabled_verification_types = G1HeapVerifier::G1VerifyAll;
 
@@ -235,6 +238,9 @@ private:
   VerifyOption     _vo;
   bool             _failures;
 
+#ifdef AARCH64
+  bool is_in_full_gc() const { return G1CollectedHeap::heap()->collector_state()->in_full_gc(); }
+#endif // AARCH64
 public:
   VerifyRegionClosure(VerifyOption vo)
     : _vo(vo),
@@ -246,7 +252,11 @@ public:
 
   bool do_heap_region(G1HeapRegion* r) {
     guarantee(!r->has_index_in_opt_cset(), "Region %u still has opt collection set index %u", r->hrm_index(), r->index_in_opt_cset());
+#ifndef AARCH64
     guarantee(!r->is_young() || r->rem_set()->is_complete(), "Remembered set for Young region %u must be complete, is %s", r->hrm_index(), r->rem_set()->get_state_str());
+#else // AARCH64
+    guarantee(is_in_full_gc() || !r->is_young() || r->rem_set()->is_complete(), "Remembered set for Young region %u must be complete outside full gc, is %s", r->hrm_index(), r->rem_set()->get_state_str());
+#endif // AARCH64
     // Humongous and old regions regions might be of any state, so can't check here.
     guarantee(!r->is_free() || !r->rem_set()->is_tracked(), "Remembered set for free region %u must be untracked, is %s", r->hrm_index(), r->rem_set()->get_state_str());
 
@@ -526,6 +536,9 @@ void G1HeapVerifier::verify_before_gc() {
 
 void G1HeapVerifier::verify_after_gc() {
   verify(VerifyOption::G1UseConcMarking, "After GC");
+#ifdef AARCH64
+  verify_card_tables_in_sync();
+#endif // AARCH64
 }
 
 void G1HeapVerifier::verify_bitmap_clear(bool from_tams) {
@@ -554,6 +567,7 @@ void G1HeapVerifier::verify_bitmap_clear(bool from_tams) {
   G1CollectedHeap::heap()->heap_region_iterate(&cl);
 }
 
+#ifndef AARCH64
 #ifndef PRODUCT
 class G1VerifyCardTableCleanup: public G1HeapRegionClosure {
   G1HeapVerifier* _verifier;
@@ -617,6 +631,123 @@ void G1HeapVerifier::verify_dirty_young_regions() {
   _g1h->collection_set()->iterate(&cl);
 }
 
+#endif // PRODUCT
+#else // AARCH64
+class G1VerifyCardTableCleanup: public G1HeapRegionClosure {
+  G1HeapVerifier* _verifier;
+public:
+  G1VerifyCardTableCleanup(G1HeapVerifier* verifier)
+    : _verifier(verifier) { }
+  virtual bool do_heap_region(G1HeapRegion* r) {
+    _verifier->verify_ct_clean_region(r);
+    if (r->is_survivor()) {
+      _verifier->verify_rt_clean_region(r);
+    } else {
+      _verifier->verify_rt_clean_from_top(r);
+    }
+    return false;
+  }
+};
+
+void G1HeapVerifier::verify_card_table_cleanup() {
+  if (VerifyAfterGC) {
+    G1VerifyCardTableCleanup cleanup_verifier(this);
+    _g1h->heap_region_iterate(&cleanup_verifier);
+  }
+}
+
+class G1VerifyCardTablesClean: public G1HeapRegionClosure {
+  G1HeapVerifier* _verifier;
+  bool _both_card_tables;
+
+public:
+  G1VerifyCardTablesClean(G1HeapVerifier* verifier, bool both_card_tables = true)
+    : _verifier(verifier), _both_card_tables(both_card_tables) { }
+
+  virtual bool do_heap_region(G1HeapRegion* r) {
+    _verifier->verify_rt_clean_region(r);     // Must be all Clean from bottom -> end.
+    if (_both_card_tables) {
+      _verifier->verify_ct_clean_region(r);
+    }
+    return false;
+  }
+};
+
+void G1HeapVerifier::verify_card_tables_clean(bool both_card_tables) {
+  G1VerifyCardTablesClean cl(this, both_card_tables);
+  _g1h->heap_region_iterate(&cl);
+}
+
+void G1HeapVerifier::verify_rt_clean_from_top(G1HeapRegion* hr) {
+  G1CardTable* ct = _g1h->refinement_table();
+  MemRegion mr(align_up(hr->top(), G1CardTable::card_size()), hr->end());
+  ct->verify_region(mr, G1CardTable::clean_card_val(), true);
+}
+
+void G1HeapVerifier::verify_rt_dirty_to_dummy_top(G1HeapRegion* hr) {
+  // We cannot guarantee that [bottom(),end()] is dirty.  Threads
+  // dirty allocated blocks as they allocate them. The thread that
+  // retires each region and replaces it with a new one will do a
+  // maximal allocation to fill in [pre_dummy_top(),end()] but will
+  // not dirty that area (one less thing to have to do while holding
+  // a lock). So we can only verify that [bottom(),pre_dummy_top()]
+  // is dirty.
+  G1CardTable* ct = _g1h->refinement_table();
+  MemRegion mr(hr->bottom(), hr->pre_dummy_top());
+  ct->verify_dirty_region(mr);
+}
+
+void G1HeapVerifier::verify_ct_clean_region(G1HeapRegion* hr) {
+  G1CardTable* ct = _g1h->card_table();
+  MemRegion mr(hr->bottom(), hr->end());
+  ct->verify_region(mr, G1CardTable::clean_card_val(), true);
+}
+
+void G1HeapVerifier::verify_rt_clean_region(G1HeapRegion* hr) {
+  G1CardTable* ct = _g1h->refinement_table();
+  MemRegion mr(hr->bottom(), hr->end());
+  ct->verify_region(mr, G1CardTable::clean_card_val(), true);
+}
+
+#ifndef PRODUCT
+
+void G1HeapVerifier::verify_card_tables_in_sync() {
+
+    // Non-Java thread card tables must be null.
+    class AssertCardTableBaseNull : public ThreadClosure {
+    public:
+
+      void do_thread(Thread* thread) {
+        ResourceMark rm;
+        assert(G1ThreadLocalData::get_byte_map_base(thread) == nullptr, "thread " PTR_FORMAT " (%s) has non-null card table base",
+               p2i(thread), thread->name());
+      }
+    } check_null_cl;
+
+    Threads::non_java_threads_do(&check_null_cl);
+
+    // Java thread card tables must be the same as the global card table.
+    class AssertSameCardTableClosure : public ThreadClosure {
+    public:
+
+      void do_thread(Thread* thread) {
+        G1CardTable::CardValue* global_ct_base = G1CollectedHeap::heap()->card_table_base();
+        G1CardTable::CardValue* cur_ct_base = G1ThreadLocalData::get_byte_map_base(thread);
+
+        ResourceMark rm;
+        assert(cur_ct_base == global_ct_base,
+               "thread " PTR_FORMAT " (%s) has wrong card table base, should be " PTR_FORMAT " is " PTR_FORMAT,
+               p2i(thread), thread->name(), p2i(global_ct_base), p2i(cur_ct_base));
+      }
+    } check_same_cl;
+
+    Threads::java_threads_do(&check_same_cl);
+}
+
+#endif // PRODUCT
+#endif // AARCH64
+
+#ifndef PRODUCT
 class G1CheckRegionAttrTableClosure : public G1HeapRegionClosure {
 private:
   bool _failures;

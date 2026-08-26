@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,6 +34,13 @@
 #define VM_OP_ENUM(type)   VMOp_##type,
 
 // Note: When new VM_XXX comes up, add 'XXX' to the template table.
+#ifdef AARCH64
+#define VM_OPS_G1_AARCH64_DO(template)            \
+  template(G1RendezvousGCThreads)
+#else
+#define VM_OPS_G1_AARCH64_DO(template)
+#endif // AARCH64
+
 #define VM_OPS_DO(template)                       \
   template(Halt)                                  \
   template(SafepointALot)                         \
@@ -59,6 +66,7 @@
   template(G1PauseRemark)                         \
   template(G1PauseCleanup)                        \
   template(G1TryInitiateConcMark)                 \
+  VM_OPS_G1_AARCH64_DO(template)                  \
   template(ZMarkEndOld)                           \
   template(ZMarkEndYoung)                         \
   template(ZMarkFlushOperation)                   \

@@ -73,6 +73,16 @@
   nonstatic_field(PtrQueue,            _buf,            void**)               \
   nonstatic_field(PtrQueue,            _index,          size_t)
 
+#ifndef AARCH64
+#define VM_STRUCTS_G1GC_NON_AARCH64_CONSTANTS(declare_constant)                \
+  declare_constant(G1CardTable::g1_young_gen)
+#define VM_STRUCTS_G1GC_NON_AARCH64_TYPES(declare_toplevel_type)               \
+  declare_toplevel_type(G1DirtyCardQueue)
+#else
+#define VM_STRUCTS_G1GC_NON_AARCH64_CONSTANTS(declare_constant)
+#define VM_STRUCTS_G1GC_NON_AARCH64_TYPES(declare_toplevel_type)
+#endif // !AARCH64
+
 #define VM_INT_CONSTANTS_G1GC(declare_constant, declare_constant_with_value)  \
   declare_constant(G1HeapRegionType::FreeTag)                                 \
   declare_constant(G1HeapRegionType::YoungMask)                               \
@@ -83,7 +93,7 @@
   declare_constant(G1HeapRegionType::ContinuesHumongousTag)                   \
   declare_constant(G1HeapRegionType::OldMask)                                 \
   declare_constant(BarrierSet::G1BarrierSet)                                  \
-  declare_constant(G1CardTable::g1_young_gen)
+  VM_STRUCTS_G1GC_NON_AARCH64_CONSTANTS(declare_constant)
 
 #define VM_TYPES_G1GC(declare_type,                                           \
                       declare_toplevel_type,                                  \
@@ -100,7 +110,7 @@
   declare_toplevel_type(PtrQueue)                                             \
   declare_toplevel_type(G1HeapRegionType)                                     \
   declare_toplevel_type(SATBMarkQueue)                                        \
-  declare_toplevel_type(G1DirtyCardQueue)                                     \
+  VM_STRUCTS_G1GC_NON_AARCH64_TYPES(declare_toplevel_type)                    \
                                                                               \
   declare_toplevel_type(G1CollectedHeap*)                                     \
   declare_toplevel_type(G1HeapRegion*)                                        \

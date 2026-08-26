@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2024, Red Hat Inc. All rights reserved.
+ * Copyright 2026 Arm Limited and/or its affiliates.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -6131,19 +6132,40 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
 // halfword, then a short, and then a byte.
 
 void MacroAssembler::string_equals(Register a1, Register a2,
-                                   Register result, Register cnt1)
+                                   Register result, Register cnt1, int elem_size)
 {
-  Label SAME, DONE, SHORT, NEXT_WORD;
+  address tpc = string_equals(a1, a2, result, cnt1, elem_size, false, noreg, noreg);
+  guarantee(tpc != nullptr, "scalar string_equals must not emit a trampoline call");
+}
+
+address MacroAssembler::string_equals(Register a1, Register a2,
+                                      Register result, Register cnt1,
+                                      int elem_size,
+                                      bool use_array_equals_stub,
+                                      Register stub_a2, Register stub_cnt)
+{
+  Label SAME, DONE, SHORT, NEXT_WORD, STUB;
   Register tmp1 = rscratch1;
   Register tmp2 = rscratch2;
   Register cnt2 = tmp2;  // cnt2 only used in array length compare
 
-  assert_different_registers(a1, a2, result, cnt1, rscratch1, rscratch2);
+  assert(elem_size == 1 || elem_size == 2, "must be 2 or 1 byte");
+  guarantee(use_array_equals_stub == UseSIMDForStringEquals,
+            "stub use must match UseSIMDForStringEquals");
+  if (use_array_equals_stub) {
+    guarantee(stub_a2 == r2 && stub_cnt == r10,
+              "registers must match large_array_equals stub");
+    assert_different_registers(a1, a2, result, cnt1, stub_a2, stub_cnt, rscratch1, rscratch2);
+  } else {
+    guarantee(stub_a2 == noreg && stub_cnt == noreg, "stub registers must not be passed");
+    assert_different_registers(a1, a2, result, cnt1, rscratch1, rscratch2);
+  }
 
 #ifndef PRODUCT
   {
+    const char kind = (elem_size == 2) ? 'U' : 'L';
     char comment[64];
-    snprintf(comment, sizeof comment, "{string_equalsL");
+    snprintf(comment, sizeof comment, "{string_equals%c", kind);
     BLOCK_COMMENT(comment);
   }
 #endif
@@ -6153,6 +6175,11 @@ void MacroAssembler::string_equals(Register a1, Register a2,
   // Check for short strings, i.e. smaller than wordSize.
   subs(cnt1, cnt1, wordSize);
   br(Assembler::LT, SHORT);
+  if (use_array_equals_stub) {
+    const int stubBytesThreshold = 3 * 64 + (UseSIMDForArrayEquals ? 0 : 16);
+    cmp(cnt1, (u1)(stubBytesThreshold - wordSize));
+    br(Assembler::GE, STUB);
+  }
   // Main 8 byte comparison loop.
   bind(NEXT_WORD); {
     ldr(tmp1, Address(post(a1, wordSize)));
@@ -6191,20 +6218,45 @@ void MacroAssembler::string_equals(Register a1, Register a2,
     cbnzw(tmp1, DONE);
   }
   bind(TAIL01);
-  tbz(cnt1, 0, SAME); // 0-1 bytes left.
+  if (elem_size == 1) { // Only needed when comparing 1-byte elements
+    tbz(cnt1, 0, SAME); // 0-1 bytes left.
     {
-    ldrb(tmp1, a1);
-    ldrb(tmp2, a2);
-    eorw(tmp1, tmp1, tmp2);
-    cbnzw(tmp1, DONE);
+      ldrb(tmp1, a1);
+      ldrb(tmp2, a2);
+      eorw(tmp1, tmp1, tmp2);
+      cbnzw(tmp1, DONE);
+    }
   }
   // Arrays are equal.
   bind(SAME);
   mov(result, true);
 
   // That's it.
+  if (use_array_equals_stub) {
+    b(DONE);
+
+    bind(STUB);
+    ldr(tmp1, Address(a1));
+    ldr(tmp2, Address(a2));
+    eor(tmp1, tmp1, tmp2);
+    cbnz(tmp1, DONE);
+    mov(stub_a2, a2);
+    mov(stub_cnt, cnt1);
+    add(stub_cnt, stub_cnt, wordSize);
+    RuntimeAddress stub = RuntimeAddress(StubRoutines::aarch64::large_array_equals());
+    assert(stub.target() != nullptr, "array_equals_long stub has not been generated");
+    address tpc = trampoline_call(stub);
+    if (tpc == nullptr) {
+      DEBUG_ONLY(reset_labels(STUB, SHORT, SAME, DONE));
+      postcond(pc() == badAddress);
+      return nullptr;
+    }
+  }
+
   bind(DONE);
   BLOCK_COMMENT("} string_equals");
+  postcond(pc() != badAddress);
+  return pc();
 }
 
 
@@ -6222,6 +6274,7 @@ const int MacroAssembler::zero_words_block_size = 8;
 // cnt:   Count in HeapWords.
 //
 // ptr, cnt, rscratch1, and rscratch2 are clobbered.
+// C2 callers that select the SVE small block zeroing path also clobber v0 and p0.
 address MacroAssembler::zero_words(Register ptr, Register cnt)
 {
   assert(is_power_of_2(zero_words_block_size), "adjust this");
@@ -6246,7 +6299,11 @@ address MacroAssembler::zero_words(Register ptr, Register cnt)
         && Thread::current()->is_Compiler_thread()
         && (task = ciEnv::current()->task())
         && is_c2_compile(task->comp_level())) {
-      address tpc = trampoline_call(zero_blocks);
+      RuntimeAddress c2_zero_blocks = RuntimeAddress(UseSVESmallBlockZeroing ?
+                                                     StubRoutines::aarch64::zero_blocks_sve() :
+                                                     StubRoutines::aarch64::zero_blocks());
+      assert(c2_zero_blocks.target() != nullptr, "zero_blocks stub has not been generated");
+      address tpc = trampoline_call(c2_zero_blocks);
       if (tpc == nullptr) {
         DEBUG_ONLY(reset_labels(around));
         return nullptr;
@@ -7780,6 +7837,69 @@ void MacroAssembler::double_move(VMRegPair src, VMRegPair dst, Register tmp) {
     else
       strd(src.first()->as_FloatRegister(), Address(sp, reg2offset_out(dst.first())));
   }
+}
+
+// Code for ArraysSupport::vectorizedMismatch() intrinsic
+// Clobbers: obja, length, tmp, rscratch1-2, vtmp1-2, pgtmp, ptmp
+void MacroAssembler::vectorized_mismatch(Register obja, Register objb, Register length,
+                                         Register log2_array_indxscale, Register result,
+                                         Register tmp, FloatRegister vtmp1, FloatRegister vtmp2,
+                                         PRegister pgtmp, PRegister ptmp) {
+  assert(UseVectorizedMismatchIntrinsic, "UseVectorizedMismatchIntrinsic must be enabled");
+  assert(UseSVE > 0, "SVE is required");
+
+  assert_different_registers(obja, objb, length, log2_array_indxscale, tmp, rscratch1, rscratch2);
+  assert_different_registers(vtmp1, vtmp2);
+  assert_different_registers(pgtmp, ptmp);
+
+  uint32_t vector_size = VM_Version::get_initial_sve_vector_length();
+
+  Label LOOP, TAIL, MISMATCH, DONE;
+
+#define LOAD_PAIR(ztmp1, ztmp2, pgtmp, src1, src2, offset)            \
+  sve_ld1b(ztmp1, B, pgtmp, Address(src1, offset));                   \
+  sve_ld1b(ztmp2, B, pgtmp, Address(src2, offset));
+
+  assert(vector_size > 8, "unexpected SVE vector size");
+  sve_ptrue(pgtmp, B, 0b01000 | (exact_log2(vector_size) - 3));
+
+  Register limit = tmp;
+  Register off = rscratch1;
+  Register tmp_result = rscratch2;
+  mov(off, 0);
+  mov(tmp_result, -1);
+
+  lslv(length, length, log2_array_indxscale);
+  subs(limit, length, vector_size);
+  br(LT, TAIL);
+
+  // Process full-vector chunk with a ptrue predicated SVE loop
+  bind(LOOP);
+  LOAD_PAIR(vtmp1, vtmp2, pgtmp, obja, objb, off);
+  sve_cmp(Assembler::NE, ptmp, B, pgtmp, vtmp1, vtmp2);
+  br(NE, MISMATCH);
+  add(off, off, vector_size);
+  cmp(off, limit);
+  br(LE, LOOP);
+
+  // Process tail elements
+  bind(TAIL);
+  sve_whilelo(pgtmp, B, off, length);
+  br(EQ, DONE);
+  LOAD_PAIR(vtmp1, vtmp2, pgtmp, obja, objb, off);
+  sve_cmp(Assembler::NE, ptmp, B, pgtmp, vtmp1, vtmp2);
+  br(EQ, DONE);
+
+  bind(MISMATCH);
+  sve_brkb(ptmp, pgtmp, ptmp, false);
+  sve_cntp(tmp_result, B, pgtmp, ptmp);
+  add(tmp_result, tmp_result, off);
+  lsrv(tmp_result, tmp_result, log2_array_indxscale);
+
+  bind(DONE);
+  mov(result, tmp_result);
+
+#undef LOAD_PAIR
 }
 
 // Implements lightweight-locking.

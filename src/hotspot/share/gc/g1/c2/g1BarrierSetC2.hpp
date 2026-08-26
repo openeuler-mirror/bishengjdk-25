@@ -37,6 +37,11 @@ const int G1C2BarrierPostNotNull = 4;
 
 class G1BarrierStubC2 : public BarrierStubC2 {
 public:
+#ifdef AARCH64
+  static bool needs_pre_barrier(const MachNode* node);
+  static bool needs_post_barrier(const MachNode* node);
+  static bool post_new_val_may_be_null(const MachNode* node);
+#endif // AARCH64
   G1BarrierStubC2(const MachNode* node);
   virtual void emit_code(MacroAssembler& masm) = 0;
 };
@@ -61,6 +66,7 @@ public:
   Register thread() const;
   Register tmp1() const;
   Register tmp2() const;
+#ifndef AARCH64
   virtual void emit_code(MacroAssembler& masm);
 };
 
@@ -82,6 +88,7 @@ public:
   Register tmp1() const;
   Register tmp2() const;
   Register tmp3() const;
+#endif // !AARCH64
   virtual void emit_code(MacroAssembler& masm);
 };
 

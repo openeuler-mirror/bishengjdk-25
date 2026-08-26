@@ -156,8 +156,12 @@ public final class DoubleToDecimal extends ToDecimal {
      * @param fd    the object that will carry <i>f</i>, <i>e</i>, and <i>n</i>.
      */
     public static void split(double v, FormattedFPDecimal fd) {
-        byte[] str = new byte[MAX_CHARS];
-        LATIN1.toDecimal(str, 0, v, fd);
+        if (fd != null) {
+            LATIN1.toDecimal(null, 0, v, fd);
+        } else {
+            byte[] str = new byte[MAX_CHARS];
+            LATIN1.toDecimal(str, 0, v, fd);
+        }
     }
 
     /**

@@ -45,7 +45,10 @@ class G1MonotonicArenaMemoryStats;
 class G1NewTracer;
 class G1ParScanThreadStateSet;
 class G1Policy;
+#ifndef AARCH64
 class G1RedirtyCardsQueueSet;
+#endif // !AARCH64
+
 class G1RemSet;
 class G1SurvivorRegions;
 class G1YoungGCAllocationFailureInjector;

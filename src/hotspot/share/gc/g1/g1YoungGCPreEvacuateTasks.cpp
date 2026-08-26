@@ -24,7 +24,9 @@
 
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1ConcurrentRefineStats.hpp"
+#ifndef AARCH64
 #include "gc/g1/g1DirtyCardQueue.hpp"
+#endif // !AARCH64
 #include "gc/g1/g1RegionPinCache.inline.hpp"
 #include "gc/g1/g1ThreadLocalData.hpp"
 #include "gc/g1/g1YoungGCPreEvacuateTasks.hpp"
@@ -35,23 +37,39 @@
 #include "runtime/thread.inline.hpp"
 #include "runtime/threads.hpp"
 
+#ifdef AARCH64
+class G1PreEvacuateCollectionSetBatchTask::JavaThreadRetireTLABs : public G1AbstractSubTask {
+#else // AARCH64
 class G1PreEvacuateCollectionSetBatchTask::JavaThreadRetireTLABAndFlushLogs : public G1AbstractSubTask {
+#endif // AARCH64
   G1JavaThreadsListClaimer _claimer;
 
   // Per worker thread statistics.
   ThreadLocalAllocStats* _local_tlab_stats;
+#ifndef AARCH64
   G1ConcurrentRefineStats* _local_refinement_stats;
+#endif // !AARCH64
 
   uint _num_workers;
 
   // There is relatively little work to do per thread.
   static const uint ThreadsPerWorker = 250;
 
+#ifdef AARCH64
+  struct RetireTLABClosure : public ThreadClosure {
+#else // AARCH64
   struct RetireTLABAndFlushLogsClosure : public ThreadClosure {
+#endif // AARCH64
     ThreadLocalAllocStats _tlab_stats;
+#ifndef AARCH64
     G1ConcurrentRefineStats _refinement_stats;
+#endif // !AARCH64
 
+#ifdef AARCH64
+    RetireTLABClosure() : _tlab_stats() { }
+#else // AARCH64
     RetireTLABAndFlushLogsClosure() : _tlab_stats(), _refinement_stats() { }
+#endif // AARCH64
 
     void do_thread(Thread* thread) override {
       assert(thread->is_Java_thread(), "must be");
@@ -61,37 +79,55 @@ class G1PreEvacuateCollectionSetBatchTask::JavaThreadRetireTLABAndFlushLogs : pu
       if (UseTLAB) {
         thread->retire_tlab(&_tlab_stats);
       }
+#ifndef AARCH64
       // Concatenate logs.
       G1DirtyCardQueueSet& qset = G1BarrierSet::dirty_card_queue_set();
       _refinement_stats += qset.concatenate_log_and_stats(thread);
+#endif // !AARCH64
       // Flush region pin count cache.
       G1ThreadLocalData::pin_count_cache(thread).flush();
     }
   };
 
 public:
+#ifdef AARCH64
+  JavaThreadRetireTLABs() :
+    G1AbstractSubTask(G1GCPhaseTimes::RetireTLABs),
+#else // AARCH64
   JavaThreadRetireTLABAndFlushLogs() :
     G1AbstractSubTask(G1GCPhaseTimes::RetireTLABsAndFlushLogs),
+#endif // AARCH64
     _claimer(ThreadsPerWorker),
     _local_tlab_stats(nullptr),
+#ifndef AARCH64
     _local_refinement_stats(nullptr),
+#endif // !AARCH64
     _num_workers(0) {
   }
 
+#ifdef AARCH64
+  ~JavaThreadRetireTLABs() {
+#else // AARCH64
   ~JavaThreadRetireTLABAndFlushLogs() {
     static_assert(std::is_trivially_destructible<G1ConcurrentRefineStats>::value, "must be");
     FREE_C_HEAP_ARRAY(G1ConcurrentRefineStats, _local_refinement_stats);
-
+#endif // AARCH64
     static_assert(std::is_trivially_destructible<ThreadLocalAllocStats>::value, "must be");
     FREE_C_HEAP_ARRAY(ThreadLocalAllocStats, _local_tlab_stats);
   }
 
   void do_work(uint worker_id) override {
+#ifdef AARCH64
+    RetireTLABClosure tc;
+#else // AARCH64
     RetireTLABAndFlushLogsClosure tc;
+#endif // AARCH64
     _claimer.apply(&tc);
 
     _local_tlab_stats[worker_id] = tc._tlab_stats;
+#ifndef AARCH64
     _local_refinement_stats[worker_id] = tc._refinement_stats;
+#endif // !AARCH64
   }
 
   double worker_cost() const override {
@@ -101,11 +137,15 @@ public:
   void set_max_workers(uint max_workers) override {
     _num_workers = max_workers;
     _local_tlab_stats = NEW_C_HEAP_ARRAY(ThreadLocalAllocStats, _num_workers, mtGC);
+#ifndef AARCH64
     _local_refinement_stats = NEW_C_HEAP_ARRAY(G1ConcurrentRefineStats, _num_workers, mtGC);
+#endif // !AARCH64
 
     for (uint i = 0; i < _num_workers; i++) {
       ::new (&_local_tlab_stats[i]) ThreadLocalAllocStats();
+#ifndef AARCH64
       ::new (&_local_refinement_stats[i]) G1ConcurrentRefineStats();
+#endif // !AARCH64
     }
   }
 
@@ -117,6 +157,7 @@ public:
     return result;
   }
 
+#ifndef AARCH64
   G1ConcurrentRefineStats refinement_stats() const {
     G1ConcurrentRefineStats result;
     for (uint i = 0; i < _num_workers; i++) {
@@ -152,21 +193,29 @@ public:
   }
 
   G1ConcurrentRefineStats refinement_stats() const { return _tc._refinement_stats; }
+#endif // !AARCH64
 };
 
 G1PreEvacuateCollectionSetBatchTask::G1PreEvacuateCollectionSetBatchTask() :
   G1BatchedTask("Pre Evacuate Prepare", G1CollectedHeap::heap()->phase_times()),
+#ifdef AARCH64
+  _java_retire_task(new JavaThreadRetireTLABs()) {
+#else // AARCH64
   _old_pending_cards(G1BarrierSet::dirty_card_queue_set().num_cards()),
   _java_retire_task(new JavaThreadRetireTLABAndFlushLogs()),
   _non_java_retire_task(new NonJavaThreadFlushLogs()) {
+#endif // AARCH64
 
+#ifndef AARCH64
   // Disable mutator refinement until concurrent refinement decides otherwise.
   G1BarrierSet::dirty_card_queue_set().set_mutator_refinement_threshold(SIZE_MAX);
 
   add_serial_task(_non_java_retire_task);
+#endif // !AARCH64
   add_parallel_task(_java_retire_task);
 }
 
+#ifndef AARCH64
 static void verify_empty_dirty_card_logs() {
 #ifdef ASSERT
   ResourceMark rm;
@@ -181,10 +230,12 @@ static void verify_empty_dirty_card_logs() {
   Threads::threads_do(&verifier);
 #endif
 }
+#endif // !AARCH64
 
 G1PreEvacuateCollectionSetBatchTask::~G1PreEvacuateCollectionSetBatchTask() {
   _java_retire_task->tlab_stats().publish();
 
+#ifndef AARCH64
   G1DirtyCardQueueSet& qset = G1BarrierSet::dirty_card_queue_set();
 
   G1ConcurrentRefineStats total_refinement_stats;
@@ -197,4 +248,5 @@ G1PreEvacuateCollectionSetBatchTask::~G1PreEvacuateCollectionSetBatchTask() {
   size_t pending_cards = qset.num_cards();
   size_t thread_buffer_cards = pending_cards - _old_pending_cards;
   G1CollectedHeap::heap()->policy()->record_concurrent_refinement_stats(pending_cards, thread_buffer_cards);
+#endif // !AARCH64
 }

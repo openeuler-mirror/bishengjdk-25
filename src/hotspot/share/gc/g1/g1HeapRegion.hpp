@@ -42,7 +42,10 @@ class G1CollectedHeap;
 class G1CMBitMap;
 class G1CSetCandidateGroup;
 class G1Predictions;
+#ifndef AARCH64
 class G1HeapRegion;
+#endif // !AARCH64
+
 class G1HeapRegionRemSet;
 class G1HeapRegionSetBase;
 class nmethod;
@@ -478,7 +481,14 @@ public:
   // Callers must ensure this is not called by multiple threads at the same time.
   void hr_clear(bool clear_space);
   // Clear the card table corresponding to this region.
+#ifdef AARCH64
+  void clear_card_table();
+  void clear_refinement_table();
+
+  void clear_both_card_tables();
+#else // AARCH64
   void clear_cardtable();
+#endif // AARCH64
 
   // Notify the region that an evacuation failure occurred for an object within this
   // region.

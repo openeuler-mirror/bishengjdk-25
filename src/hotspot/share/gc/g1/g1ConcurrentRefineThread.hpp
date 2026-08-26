@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,19 +33,22 @@
 // Forward Decl.
 class G1ConcurrentRefine;
 
-// One or more G1 Concurrent Refinement Threads may be active if concurrent
-// refinement is in progress.
+// Concurrent refinement control thread watching card mark accrual on the card table
+// and starting refinement work.
 class G1ConcurrentRefineThread: public ConcurrentGCThread {
   friend class VMStructs;
   friend class G1CollectedHeap;
 
+#ifndef AARCH64
   double _vtime_start;  // Initial virtual time.
   double _vtime_accum;  // Accumulated virtual time.
-
+#endif // !AARCH64
   Monitor _notifier;
   bool _requested_active;
 
+#ifndef AARCH64
   G1ConcurrentRefineStats _refinement_stats;
+#endif // !AARCH64
 
   uint _worker_id;
 
@@ -53,24 +56,46 @@ class G1ConcurrentRefineThread: public ConcurrentGCThread {
 
   NONCOPYABLE(G1ConcurrentRefineThread);
 
+#ifdef AARCH64
+  G1ConcurrentRefineThread(G1ConcurrentRefine* cr);
+#else // AARCH64
 protected:
   G1ConcurrentRefineThread(G1ConcurrentRefine* cr, uint worker_id);
+#endif // AARCH64
 
   Monitor* notifier() { return &_notifier; }
   bool requested_active() const { return _requested_active; }
 
   // Returns !should_terminate().
   // precondition: this is the current thread.
+#ifdef AARCH64
+  bool wait_for_work();
+#else // AARCH64
   virtual bool wait_for_completed_buffers() = 0;
+#endif // AARCH64
 
   // Deactivate if appropriate.  Returns true if deactivated.
   // precondition: this is the current thread.
+#ifdef AARCH64
+  bool deactivate();
+#else // AARCH64
   virtual bool maybe_deactivate();
+#endif // AARCH64
 
+#ifdef AARCH64
+  // Swap card table and do a complete re-examination/refinement pass over the
+  // refinement table.
+  void do_refinement();
+#else // AARCH64
   // Attempt to do some refinement work.
   // precondition: this is the current thread.
   virtual void do_refinement_step() = 0;
+#endif // AARCH64
 
+#ifdef AARCH64
+  // Update concurrent refine threads cpu time stats.
+  void update_perf_counter_cpu_time();
+#else // AARCH64
   // Update concurrent refine threads stats.
   // If we are in Primary thread, we additionally update CPU time tracking.
   virtual void track_usage() {
@@ -86,9 +111,14 @@ protected:
   // was performed, false if no work available per stop_at.
   // precondition: this is the current thread.
   bool try_refinement_step(size_t stop_at);
+#endif // AARCH64
 
   void report_active(const char* reason) const;
+#ifdef AARCH64
+  void report_inactive(const char* reason) const;
+#else // AARCH64
   void report_inactive(const char* reason, const G1ConcurrentRefineStats& stats) const;
+#endif // AARCH64
 
   G1ConcurrentRefine* cr() const { return _cr; }
 
@@ -96,15 +126,23 @@ protected:
   void stop_service() override;
 
 public:
+#ifdef AARCH64
+  static G1ConcurrentRefineThread* create(G1ConcurrentRefine* cr);
+#else // AARCH64
   static G1ConcurrentRefineThread* create(G1ConcurrentRefine* cr, uint worker_id);
   virtual ~G1ConcurrentRefineThread() = default;
 
   uint worker_id() const { return _worker_id; }
+#endif // AARCH64
 
   // Activate this thread.
   // precondition: this is not the current thread.
   void activate();
 
+#ifdef AARCH64
+  // Total cpu time spent in this thread so far.
+  jlong cpu_time();
+#else // AARCH64
   G1ConcurrentRefineStats* refinement_stats() {
     return &_refinement_stats;
   }
@@ -115,6 +153,7 @@ public:
 
   // Total virtual time so far.
   double vtime_accum() { return _vtime_accum; }
+#endif // AARCH64
 };
 
 #endif // SHARE_GC_G1_G1CONCURRENTREFINETHREAD_HPP

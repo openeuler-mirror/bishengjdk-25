@@ -33,6 +33,9 @@
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.hpp"
+#ifdef AARCH64
+#include "runtime/atomic.hpp"
+#endif // AARCH64
 #include "runtime/thread.hpp"
 
 inline void G1BarrierSet::enqueue_preloaded(oop pre_val) {
@@ -74,10 +77,20 @@ inline void G1BarrierSet::write_region(MemRegion mr) {
 
 template <DecoratorSet decorators, typename T>
 inline void G1BarrierSet::write_ref_field_post(T* field) {
+#ifdef AARCH64
+  // Make sure that the card table reference is read only once. Otherwise the compiler
+  // might reload that value in the two accesses below, that could cause writes to
+  // the wrong card table.
+  CardTable* card_table = Atomic::load(&_card_table);
+  CardValue* byte = card_table->byte_for(field);
+  if (*byte == G1CardTable::clean_card_val()) {
+    *byte = G1CardTable::dirty_card_val();
+#else // AARCH64
   volatile CardValue* byte = _card_table->byte_for(field);
   if (*byte != G1CardTable::g1_young_card_val()) {
     // Take a slow path for cards in old
     write_ref_field_post_slow(byte);
+#endif // AARCH64
   }
 }
 
@@ -127,7 +140,11 @@ inline void G1BarrierSet::AccessBarrier<decorators, BarrierSetT>::
 oop_store_not_in_heap(T* addr, oop new_value) {
   // Apply SATB barriers for all non-heap references, to allow
   // concurrent scanning of such references.
+#ifdef AARCH64
+  G1BarrierSet *bs = g1_barrier_set();
+#else // AARCH64
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
+#endif // AARCH64
   bs->write_ref_field_pre<decorators>(addr);
   Raw::oop_store(addr, new_value);
 }

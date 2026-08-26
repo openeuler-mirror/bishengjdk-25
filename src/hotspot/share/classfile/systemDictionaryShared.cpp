@@ -43,6 +43,9 @@
 #include "classfile/classFileStream.hpp"
 #include "classfile/classLoader.hpp"
 #include "classfile/classLoaderData.inline.hpp"
+#ifdef AARCH64
+#include "classfile/bytecodeEnhancement.hpp"
+#endif
 #include "classfile/classLoaderDataGraph.hpp"
 #include "classfile/classLoaderExt.hpp"
 #include "classfile/dictionary.hpp"
@@ -130,6 +133,12 @@ InstanceKlass* SystemDictionaryShared::lookup_from_stream(Symbol* class_name,
   if (class_name == nullptr) {  // don't do this for hidden classes
     return nullptr;
   }
+#ifdef AARCH64
+  // Bytecode enhancement candidates should not be loaded from CDS.
+  if (BytecodeEnhancement::is_enabled() && BytecodeEnhancement::should_bypass_cds(class_name)) {
+    return nullptr;
+  }
+#endif
   if (class_loader.is_null() ||
       SystemDictionary::is_system_class_loader(class_loader()) ||
       SystemDictionary::is_platform_class_loader(class_loader())) {
@@ -208,6 +217,20 @@ DumpTimeClassInfo* SystemDictionaryShared::get_info_locked(InstanceKlass* k) {
   return info;
 }
 
+void SystemDictionaryShared::check_code_source(InstanceKlass* ik, const ClassFileStream* cfs) {
+  if (CDSConfig::is_dumping_preimage_static_archive() && !is_builtin_loader(ik->class_loader_data())) {
+    if (cfs == nullptr || cfs->source() == nullptr || strncmp(cfs->source(), "file:", 5) != 0) {
+      // AOT cache filtering:
+      // For non-built-in loaders, cache only the classes that have a file: code source, so
+      // we can avoid caching dynamically generated classes that are likely to change from
+      // run to run. This is similar to the filtering in ClassListWriter::write_to_stream()
+      // for the classic CDS static archive.
+      warn_excluded(ik, "Not loaded from \"file:\" code source");
+      set_excluded(ik);
+    }
+  }
+}
+
 bool SystemDictionaryShared::check_for_exclusion(InstanceKlass* k, DumpTimeClassInfo* info) {
   if (CDSConfig::is_dumping_dynamic_archive() && MetaspaceShared::is_in_shared_metaspace(k)) {
     // We have reached a super type that's already in the base archive. Treat it
@@ -258,6 +281,12 @@ bool SystemDictionaryShared::check_for_exclusion_impl(InstanceKlass* k) {
     return false; // Do not exclude: unregistered classes are passed from preimage to final image.
   }
 
+#ifdef AARCH64
+  // Bytecode enhancement candidates should not be dumped into CDS.
+  if (BytecodeEnhancement::is_enabled() && BytecodeEnhancement::should_bypass_cds(k->name())) {
+    return warn_excluded(k, "Bytecode enhancement candidate");
+  }
+#endif
   if (k->is_in_error_state()) {
     return warn_excluded(k, "In error state");
   }
@@ -1306,6 +1335,12 @@ SystemDictionaryShared::find_record(RunTimeSharedDictionary* static_dict, RunTim
 }
 
 InstanceKlass* SystemDictionaryShared::find_builtin_class(Symbol* name) {
+#ifdef AARCH64
+  // Bytecode enhancement candidates should not be loaded from CDS.
+  if (BytecodeEnhancement::is_enabled() && BytecodeEnhancement::should_bypass_cds(name)) {
+    return nullptr;
+  }
+#endif
   const RunTimeClassInfo* record = find_record(&_static_archive._builtin_dictionary,
                                                &_dynamic_archive._builtin_dictionary,
                                                name);

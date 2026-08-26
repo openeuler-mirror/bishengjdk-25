@@ -74,7 +74,12 @@ class G1HeapRegionManager: public CHeapObj<mtGC> {
   friend class G1HeapRegionClaimer;
 
   G1RegionToSpaceMapper* _bot_mapper;
+#ifdef AARCH64
+  G1RegionToSpaceMapper* _card_table_mapper;
+  G1RegionToSpaceMapper* _refinement_table_mapper;
+#else // AARCH64
   G1RegionToSpaceMapper* _cardtable_mapper;
+#endif // AARCH64
 
   // Keeps track of the currently committed regions in the heap. The committed regions
   // can either be active (ready for use) or inactive (ready for uncommit).
@@ -164,7 +169,12 @@ public:
   void initialize(G1RegionToSpaceMapper* heap_storage,
                   G1RegionToSpaceMapper* bitmap,
                   G1RegionToSpaceMapper* bot,
+#ifdef AARCH64
+                  G1RegionToSpaceMapper* card_table,
+                  G1RegionToSpaceMapper* refinement_table);
+#else // AARCH64
                   G1RegionToSpaceMapper* cardtable);
+#endif // AARCH64
 
   // Return the "dummy" region used for G1AllocRegion. This is currently a hardwired
   // new G1HeapRegion that owns G1HeapRegion at index 0. Since at the moment we commit
@@ -249,7 +259,9 @@ public:
   // The number of regions reserved for the heap.
   uint max_num_regions() const { return (uint)_regions.length(); }
 
+#ifndef AARCH64
   uint num_available_regions() const { return num_free_regions() + num_inactive_regions(); }
+#endif // !AARCH64
 
   // Return the current maximum number of regions in the heap (dynamic max heap).
   uint dynamic_max_heap_length() const { return (uint)_dynamic_max_heap_length; }

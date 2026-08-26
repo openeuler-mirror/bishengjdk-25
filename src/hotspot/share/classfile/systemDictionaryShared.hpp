@@ -219,6 +219,7 @@ public:
 
   static void update_shared_entry(InstanceKlass* klass, int id);
   static void set_shared_class_misc_info(InstanceKlass* k, ClassFileStream* cfs);
+  static void check_code_source(InstanceKlass* ik, const ClassFileStream* cfs) NOT_CDS_RETURN;
 #if INCLUDE_AGGRESSIVE_CDS
   static void set_shared_class_file(InstanceKlass* k, ClassFileStream* cfs);
   static void set_url_string(InstanceKlass* k, const char* source);

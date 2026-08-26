@@ -1095,6 +1095,26 @@ bool VectorNode::should_swap_inputs_to_help_global_value_numbering() {
     return false;
   }
 
+#ifdef AARCH64
+  switch (Opcode()) {
+    case Op_MulVB:
+    case Op_MulVS:
+    case Op_MulVI:
+      if (UseSVE > 0 && length_in_bytes() > 16) {
+        const bool in1_is_replicate = in(1)->Opcode() == Op_Replicate;
+        const bool in2_is_replicate = in(2)->Opcode() == Op_Replicate;
+        if (in1_is_replicate != in2_is_replicate) {
+          // SVE integer multiply is destructive on its first source. Prefer
+          // keeping the data vector there so broadcast constants stay reusable.
+          return in1_is_replicate;
+        }
+      }
+      break;
+    default:
+      break;
+  }
+#endif
+
   switch(Opcode()) {
     case Op_AddVB:
     case Op_AddVS:
@@ -1135,9 +1155,47 @@ bool VectorNode::should_swap_inputs_to_help_global_value_numbering() {
   }
 }
 
+static bool collect_same_mulv_leaves(Node* n, int opc, Node*& leaf, uint& leaves, uint depth) {
+  // Keep this matcher intentionally small. It is only meant to recognize
+  // four equal integral vector operands, e.g. x*x*x*x.
+  if (depth > 3 || leaves > 4) {
+    return false;
+  }
+  if (n->Opcode() == opc) {
+    return collect_same_mulv_leaves(n->in(1), opc, leaf, leaves, depth + 1) &&
+           collect_same_mulv_leaves(n->in(2), opc, leaf, leaves, depth + 1);
+  }
+  if (leaf == nullptr) {
+    leaf = n;
+  }
+  if (leaf != n) {
+    return false;
+  }
+  leaves++;
+  return leaves <= 4;
+}
+
 Node* VectorNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   if (Matcher::vector_needs_partial_operations(this, vect_type())) {
     return try_to_gen_masked_vector(phase, this, vect_type());
+  }
+
+  if (!is_predicated_vector() && Opcode() == Op_MulVL) {
+    Node* leaf = nullptr;
+    uint leaves = 0;
+    if (collect_same_mulv_leaves(this, Opcode(), leaf, leaves, 0) && leaves == 4) {
+      Node* square = nullptr;
+      if (in(1)->Opcode() == Opcode() && in(1)->in(1) == leaf && in(1)->in(2) == leaf) {
+        square = in(1);
+      } else if (in(2)->Opcode() == Opcode() && in(2)->in(1) == leaf && in(2)->in(2) == leaf) {
+        square = in(2);
+      } else {
+        square = phase->transform(VectorNode::make(Opcode(), leaf, leaf, vect_type()));
+      }
+      if (in(1) != square || in(2) != square) {
+        return VectorNode::make(Opcode(), square, square, vect_type());
+      }
+    }
   }
 
   // Sort inputs of commutative non-predicated vector operations to help value numbering.

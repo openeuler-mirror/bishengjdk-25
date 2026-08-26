@@ -287,7 +287,11 @@ public:
     _chunk_bitmap(mtGC) {
 
     _num_evac_fail_regions = _evac_failure_regions->num_regions_evac_failed();
+#ifdef AARCH64
+    _num_chunks_per_region = G1CollectedHeap::get_chunks_per_region_for_scan();
+#else // AARCH64
     _num_chunks_per_region = G1CollectedHeap::get_chunks_per_region();
+#endif // AARCH64
 
     _chunk_size = static_cast<uint>(G1HeapRegion::GrainWords / _num_chunks_per_region);
 
@@ -300,7 +304,11 @@ public:
   double worker_cost() const override {
     assert(_evac_failure_regions->has_regions_evac_failed(), "Should not call this if there were no evacuation failures");
 
+#ifdef AARCH64
+    double workers_per_region = (double)G1CollectedHeap::get_chunks_per_region_for_scan() / G1RestoreRetainedRegionChunksPerWorker;
+#else // AARCH64
     double workers_per_region = (double)G1CollectedHeap::get_chunks_per_region() / G1RestoreRetainedRegionChunksPerWorker;
+#endif // AARCH64
     return workers_per_region * _evac_failure_regions->num_regions_evac_failed();
   }
 
@@ -480,6 +488,7 @@ public:
   }
 };
 
+#ifndef AARCH64
 class RedirtyLoggedCardTableEntryClosure : public G1CardTableEntryClosure {
   size_t _num_dirtied;
   G1CollectedHeap* _g1h;
@@ -516,6 +525,7 @@ public:
 
   size_t num_dirtied()   const { return _num_dirtied; }
 };
+#endif // !AARCH64
 
 class G1PostEvacuateCollectionSetCleanupTask2::ProcessEvacuationFailedRegionsTask : public G1AbstractSubTask {
   G1EvacFailureRegions* _evac_failure_regions;
@@ -572,6 +582,7 @@ public:
   }
 };
 
+#ifndef AARCH64
 class G1PostEvacuateCollectionSetCleanupTask2::RedirtyLoggedCardsTask : public G1AbstractSubTask {
   BufferNodeList* _rdc_buffers;
   uint _num_buffer_lists;
@@ -613,6 +624,7 @@ public:
     record_work_item(worker_id, 0, cl.num_dirtied());
   }
 };
+#endif // !AARCH64
 
 // Helper class to keep statistics for the collection set freeing
 class FreeCSetStats {
@@ -765,7 +777,11 @@ class FreeCSetClosure : public G1HeapRegionClosure {
     assert(retain_region == r->rem_set()->is_tracked(), "When retaining a region, remembered set should be kept.");
 
     // Add region to old set, need to hold lock.
+#ifdef AARCH64
+    MutexLocker x(G1OldSets_lock, Mutex::_no_safepoint_check_flag);
+#else // AARCH64
     MutexLocker x(OldSets_lock, Mutex::_no_safepoint_check_flag);
+#endif // AARCH64
     _g1h->old_set_add(r);
   }
 
@@ -796,7 +812,6 @@ public:
     assert(r->in_collection_set(), "Invariant: %u missing from CSet", r->hrm_index());
     JFREventForRegion event(r, _worker_id);
     TimerForRegion timer(timer_for_region(r));
-
 
     if (r->is_young()) {
       assert_tracks_surviving_words(r);
@@ -887,7 +902,11 @@ public:
     p->record_serial_free_cset_time_ms((Ticks::now() - serial_time).seconds() * 1000.0);
   }
 
+#ifdef AARCH64
+  double worker_cost() const override { return G1CollectedHeap::heap()->collection_set()->initial_region_length(); }
+#else // AARCH64
   double worker_cost() const override { return G1CollectedHeap::heap()->collection_set()->region_length(); }
+#endif // AARCH64
 
   void set_max_workers(uint max_workers) override {
     _active_workers = max_workers;
@@ -908,24 +927,55 @@ public:
   }
 };
 
+#ifdef AARCH64
+class G1PostEvacuateCollectionSetCleanupTask2::ResizeTLABsAndSwapCardTableTask : public G1AbstractSubTask {
+#else // AARCH64
 class G1PostEvacuateCollectionSetCleanupTask2::ResizeTLABsTask : public G1AbstractSubTask {
+#endif // AARCH64
   G1JavaThreadsListClaimer _claimer;
 
   // There is not much work per thread so the number of threads per worker is high.
   static const uint ThreadsPerWorker = 250;
 
 public:
+#ifdef AARCH64
+  ResizeTLABsAndSwapCardTableTask()
+    : G1AbstractSubTask(G1GCPhaseTimes::ResizeThreadLABs), _claimer(ThreadsPerWorker)
+  {
+    G1BarrierSet::g1_barrier_set()->swap_global_card_table();
+  }
+#else // AARCH64
   ResizeTLABsTask() : G1AbstractSubTask(G1GCPhaseTimes::ResizeThreadLABs), _claimer(ThreadsPerWorker) { }
+#endif // AARCH64
 
   void do_work(uint worker_id) override {
+
+#ifdef AARCH64
+    class ResizeAndSwapCardTableClosure : public ThreadClosure {
+#else // AARCH64
     class ResizeClosure : public ThreadClosure {
+#endif // AARCH64
     public:
 
       void do_thread(Thread* thread) {
+#ifdef AARCH64
+        if (UseTLAB && ResizeTLAB) {
+          static_cast<JavaThread*>(thread)->tlab().resize();
+        }
+
+        G1BarrierSet::g1_barrier_set()->update_card_table_base(thread);
+#else // AARCH64
         static_cast<JavaThread*>(thread)->tlab().resize();
+#endif // AARCH64
       }
+#ifdef AARCH64
+    } resize_and_swap_cl;
+
+    _claimer.apply(&resize_and_swap_cl);
+#else // AARCH64
     } cl;
     _claimer.apply(&cl);
+#endif // AARCH64
   }
 
   double worker_cost() const override {
@@ -968,13 +1018,19 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
   if (evac_failure_regions->has_regions_evac_failed()) {
     add_parallel_task(new ProcessEvacuationFailedRegionsTask(evac_failure_regions));
   }
+#ifndef AARCH64
   add_parallel_task(new RedirtyLoggedCardsTask(evac_failure_regions,
                                                per_thread_states->rdc_buffers(),
                                                per_thread_states->num_workers()));
+#endif // !AARCH64
 
+#ifdef AARCH64
+  add_parallel_task(new ResizeTLABsAndSwapCardTableTask());
+#else // AARCH64
   if (UseTLAB && ResizeTLAB) {
     add_parallel_task(new ResizeTLABsTask());
   }
+#endif // AARCH64
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));

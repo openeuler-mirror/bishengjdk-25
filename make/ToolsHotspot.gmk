@@ -46,5 +46,11 @@ TOOL_JFR_GEN := $(JAVA_SMALL) -cp $(HOTSPOT_TOOLS_OUTPUTDIR) \
 
 ################################################################################
 
+TOOL_GENERATESTRINGCASEMAPPINGS := $(JAVA_SMALL) \
+    -cp $(HOTSPOT_TOOLS_OUTPUTDIR) \
+    build.tools.generatestringcasemappings.GenerateStringCaseMappings
+
+################################################################################
+
 endif # include guard
 include MakeIncludeEnd.gmk

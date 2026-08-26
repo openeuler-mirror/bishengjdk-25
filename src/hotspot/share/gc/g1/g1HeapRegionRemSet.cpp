@@ -63,7 +63,11 @@ G1HeapRegionRemSet::G1HeapRegionRemSet(G1HeapRegion* hr) :
   _state(Untracked) { }
 
 G1HeapRegionRemSet::~G1HeapRegionRemSet() {
+#ifdef AARCH64
+  assert(!has_cset_group(), "Still assigned to a CSet group");
+#else // AARCH64
   assert(!is_added_to_cset_group(), "Still assigned to a CSet group");
+#endif // AARCH64
 }
 
 void G1HeapRegionRemSet::clear_fcc() {
@@ -76,7 +80,11 @@ void G1HeapRegionRemSet::clear(bool only_cardset, bool keep_tracked) {
   }
   clear_fcc();
 
+#ifdef AARCH64
+  if (has_cset_group()) {
+#else // AARCH64
   if (is_added_to_cset_group()) {
+#endif // AARCH64
     card_set()->clear();
     assert(card_set()->occupied() == 0, "Should be clear.");
   }
@@ -90,13 +98,21 @@ void G1HeapRegionRemSet::clear(bool only_cardset, bool keep_tracked) {
 
 void G1HeapRegionRemSet::reset_table_scanner() {
   _code_roots.reset_table_scanner();
+#ifdef AARCH64
+  if (has_cset_group()) {
+#else // AARCH64
   if (is_added_to_cset_group()) {
+#endif // AARCH64
     card_set()->reset_table_scanner();
   }
 }
 
 G1MonotonicArenaMemoryStats G1HeapRegionRemSet::card_set_memory_stats() const {
+#ifdef AARCH64
+  assert(has_cset_group(), "pre-condition");
+#else // AARCH64
   assert(is_added_to_cset_group(), "pre-condition");
+#endif // AARCH64
   return cset_group()->card_set_memory_stats();
 }
 

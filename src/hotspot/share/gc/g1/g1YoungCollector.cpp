@@ -39,7 +39,9 @@
 #include "gc/g1/g1MonitoringSupport.hpp"
 #include "gc/g1/g1ParScanThreadState.inline.hpp"
 #include "gc/g1/g1Policy.hpp"
+#ifndef AARCH64
 #include "gc/g1/g1RedirtyCardsQueue.hpp"
+#endif // !AARCH64
 #include "gc/g1/g1RegionPinCache.inline.hpp"
 #include "gc/g1/g1RemSet.hpp"
 #include "gc/g1/g1RootProcessor.hpp"
@@ -271,7 +273,11 @@ void G1YoungCollector::calculate_collection_set(G1EvacInfo* evacuation_info, dou
   allocator()->release_mutator_alloc_regions();
 
   collection_set()->finalize_initial_collection_set(target_pause_time_ms, survivor_regions());
+#ifdef AARCH64
+  evacuation_info->set_collection_set_regions(collection_set()->initial_region_length() +
+#else // AARCH64
   evacuation_info->set_collection_set_regions(collection_set()->region_length() +
+#endif // AARCH64
                                               collection_set()->num_optional_regions());
 
   concurrent_mark()->verify_no_collection_set_oops();
@@ -519,7 +525,6 @@ void G1YoungCollector::pre_evacuate_collection_set(G1EvacInfo* evacuation_info) 
     G1MonotonicArenaMemoryStats sampled_card_set_stats = g1_prep_task.all_card_set_stats();
     sampled_card_set_stats.add(_g1h->young_regions_card_set_memory_stats());
     _g1h->set_young_gen_card_set_stats(sampled_card_set_stats);
-
     _g1h->set_humongous_stats(g1_prep_task.humongous_total(), g1_prep_task.humongous_candidates());
 
     phase_times()->record_register_regions(task_time.seconds() * 1000.0);
@@ -815,14 +820,32 @@ void G1YoungCollector::evacuate_next_optional_regions(G1ParScanThreadStateSet* p
 }
 
 void G1YoungCollector::evacuate_optional_collection_set(G1ParScanThreadStateSet* per_thread_states) {
+#ifdef AARCH64
+  const double pause_start_time_ms = policy()->cur_pause_start_sec() * 1000.0;
+  double target_pause_time_ms = MaxGCPauseMillis;
+
+  if (G1ForceOptionalEvacuation) {
+    target_pause_time_ms = DBL_MAX;
+  }
+#else // AARCH64
   const double collection_start_time_ms = phase_times()->cur_collection_start_sec() * 1000.0;
+#endif // AARCH64
 
   while (!evacuation_alloc_failed() && collection_set()->num_optional_regions() > 0) {
 
+#ifdef AARCH64
+    double time_used_ms = os::elapsedTime() * 1000.0 - pause_start_time_ms;
+    double time_left_ms = target_pause_time_ms - time_used_ms;
+#else // AARCH64
     double time_used_ms = os::elapsedTime() * 1000.0 - collection_start_time_ms;
     double time_left_ms = MaxGCPauseMillis - time_used_ms;
+#endif // AARCH64
 
+#ifdef AARCH64
+    if (time_left_ms <= 0 ||
+#else // AARCH64
     if (time_left_ms < 0 ||
+#endif // AARCH64
         !collection_set()->finalize_optional_for_evacuation(time_left_ms * policy()->optional_evacuation_fraction())) {
       log_trace(gc, ergo, cset)("Skipping evacuation of %u optional regions, no more regions can be evacuated in %.3fms",
                                 collection_set()->num_optional_regions(), time_left_ms);
@@ -910,13 +933,8 @@ class G1STWRefProcProxyTask : public RefProcProxyTask {
   TaskTerminator _terminator;
   G1ScannerTasksQueueSet& _task_queues;
 
-  // Special closure for enqueuing discovered fields: during enqueue the card table
-  // may not be in shape to properly handle normal barrier calls (e.g. card marks
-  // in regions that failed evacuation, scribbling of various values by card table
-  // scan code). Additionally the regular barrier enqueues into the "global"
-  // DCQS, but during GC we need these to-be-refined entries in the GC local queue
-  // so that after clearing the card table, the redirty cards phase will properly
-  // mark all dirty cards to be picked up by refinement.
+  // G1 specific closure for marking discovered fields. Need to mark the card in the
+  // refinement table as the card table is in use by garbage collection.
   class G1EnqueueDiscoveredFieldClosure : public EnqueueDiscoveredFieldClosure {
     G1CollectedHeap* _g1h;
     G1ParScanThreadState* _pss;

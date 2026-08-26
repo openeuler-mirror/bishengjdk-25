@@ -27,16 +27,26 @@
 
 #include "gc/g1/g1RegionsOnNodes.hpp"
 #include "runtime/globals.hpp"
+#ifdef AARCH64
+#include "utilities/growableArray.hpp"
+#endif // AARCH64
 
 template <typename T>
 class GrowableArray;
 class G1HeapRegion;
 
+// Set of current survivor regions.
 class G1SurvivorRegions {
+#ifdef AARCH64
+  GrowableArray<G1HeapRegion*> _regions;
+  volatile size_t _used_bytes;
+  G1RegionsOnNodes _regions_on_node;
+#else // AARCH64
 private:
   GrowableArray<G1HeapRegion*>* _regions;
   volatile size_t             _used_bytes;
   G1RegionsOnNodes            _regions_on_node;
+#endif // AARCH64
 
 public:
   G1SurvivorRegions();
@@ -50,7 +60,11 @@ public:
   uint length() const;
   uint regions_on_node(uint node_index) const;
 
+#ifdef AARCH64
+  const GrowableArray<G1HeapRegion*>& regions() const {
+#else // AARCH64
   const GrowableArray<G1HeapRegion*>* regions() const {
+#endif // AARCH64
     return _regions;
   }
 

@@ -93,6 +93,15 @@ int VM_Version::get_cpu_model() {
   return cpu_lines;
 }
 
+static bool is_950() {
+  return VM_Version::cpu_model() == 0xd06 || VM_Version::cpu_model2() == 0xd06;
+}
+
+static bool is_before_950() {
+  return VM_Version::cpu_model() < 0xd06 &&
+         (VM_Version::cpu_model2() == 0 || VM_Version::cpu_model2() < 0xd06);
+}
+
 void VM_Version::initialize() {
   _supports_atomic_getset4 = true;
   _supports_atomic_getadd4 = true;
@@ -302,11 +311,6 @@ void VM_Version::initialize() {
 
   if (FLAG_IS_DEFAULT(UseAdler32Intrinsics)) {
     FLAG_SET_DEFAULT(UseAdler32Intrinsics, true);
-  }
-
-  if (UseVectorizedMismatchIntrinsic) {
-    warning("UseVectorizedMismatchIntrinsic specified, but not available on this CPU.");
-    FLAG_SET_DEFAULT(UseVectorizedMismatchIntrinsic, false);
   }
 
   if (VM_Version::supports_lse()) {
@@ -648,6 +652,17 @@ void VM_Version::initialize() {
   }
 #endif
 
+  if (UseSVE > 0) {
+    if (FLAG_IS_DEFAULT(UseVectorizedMismatchIntrinsic)) {
+      UseVectorizedMismatchIntrinsic = true;
+    }
+  } else if (UseVectorizedMismatchIntrinsic) {
+    if (!FLAG_IS_DEFAULT(UseVectorizedMismatchIntrinsic)) {
+      warning("UseVectorizedMismatchIntrinsic specified, but not supported on this CPU");
+    }
+    FLAG_SET_DEFAULT(UseVectorizedMismatchIntrinsic, false);
+  }
+
   _spin_wait = get_spin_wait_desc();
 
   check_virtualizations();
@@ -680,6 +695,151 @@ void VM_Version::initialize() {
   _features_string = extract_features_string(_cpu_info_string,
                                              strnlen(_cpu_info_string, sizeof(buf)),
                                              features_offset);
+
+  const bool is_hisi_enabled = VM_Version::is_hisi_enabled();
+  constexpr uint string_case_off =
+      string_case_backend_value(StringCaseBackend::off);
+  constexpr uint string_case_sve =
+      string_case_backend_value(StringCaseBackend::sve);
+  constexpr uint string_case_sve2 =
+      string_case_backend_value(StringCaseBackend::sve2);
+  constexpr uint string_case_auto =
+      string_case_backend_value(StringCaseBackend::automatic);
+
+#define ENABLE_HISI_FLAG_BY_DEFAULT(flag)                                   \
+  do {                                                                      \
+    if (!flag && FLAG_IS_DEFAULT(flag)) {                                   \
+      FLAG_SET_DEFAULT(flag, true);                                         \
+    }                                                                       \
+  } while (false)
+
+#define DISABLE_HISI_FLAG_VALUE(flag, disabled_value)                       \
+  do {                                                                      \
+    if ((flag) != (disabled_value)) {                                       \
+      if (!FLAG_IS_DEFAULT(flag)) {                                         \
+        warning("%s specified, but is not supported on this hardware. "     \
+                "Disabling.", #flag);                                       \
+      }                                                                     \
+      FLAG_SET_DEFAULT(flag, disabled_value);                               \
+    }                                                                       \
+  } while (false)
+
+#define DISABLE_HISI_FLAG(flag) DISABLE_HISI_FLAG_VALUE(flag, false)
+
+  if (is_hisi_enabled) {
+    if (UseHisiOptimizations) {
+      if (FLAG_IS_DEFAULT(StringCaseIntrinsicBackend)) {
+        FLAG_SET_DEFAULT(StringCaseIntrinsicBackend, string_case_auto);
+      }
+
+      if (VM_Version::supports_sve2()) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseSVEHashCodeIntrinsic);
+      }
+
+      if (VM_Version::supports_sve()) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseStringEqualsIgnoreCaseIntrinsic);
+      }
+
+      if (is_950()) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseStreamPrefetchForArrayCopy);
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseSVESmallBlockZeroing);
+      }
+
+      // This check may override UseLSE initialized above, so keep it late in
+      // VM_Version::initialize().
+      if (is_before_950() && UseLSE && FLAG_IS_DEFAULT(UseLSE)) {
+        FLAG_SET_DEFAULT(UseLSE, false);
+      }
+
+      if (is_before_950() && UseLSE) {
+        ENABLE_HISI_FLAG_BY_DEFAULT(UseLSEPrefetch);
+      }
+
+      ENABLE_HISI_FLAG_BY_DEFAULT(UseSIMDForStringEquals);
+      ENABLE_HISI_FLAG_BY_DEFAULT(UseUTFConversionIntrinsics);
+      ENABLE_HISI_FLAG_BY_DEFAULT(UseStlrForRelease);
+    }
+
+    if (UseSVEHashCodeIntrinsic && !VM_Version::supports_sve2()) {
+      if (!FLAG_IS_DEFAULT(UseSVEHashCodeIntrinsic)) {
+        warning("UseSVEHashCodeIntrinsic specified, but requires SVE2. "
+                "Disabling.");
+      }
+      FLAG_SET_DEFAULT(UseSVEHashCodeIntrinsic, false);
+    }
+
+    if (UseStringEqualsIgnoreCaseIntrinsic && !VM_Version::supports_sve()) {
+      if (!FLAG_IS_DEFAULT(UseStringEqualsIgnoreCaseIntrinsic)) {
+        warning("UseStringEqualsIgnoreCaseIntrinsic specified, but requires "
+                "SVE. Disabling.");
+      }
+      FLAG_SET_DEFAULT(UseStringEqualsIgnoreCaseIntrinsic, false);
+    }
+
+    if (StringCaseIntrinsicBackend == string_case_auto) {
+      if (UseSVE >= 2 && VM_Version::supports_svebitperm()) {
+        FLAG_SET_DEFAULT(StringCaseIntrinsicBackend, string_case_sve2);
+      } else if (UseSVE >= 1) {
+        FLAG_SET_DEFAULT(StringCaseIntrinsicBackend, string_case_sve);
+      } else {
+        FLAG_SET_DEFAULT(StringCaseIntrinsicBackend, string_case_off);
+      }
+    }
+    if (StringCaseIntrinsicBackend == string_case_sve && UseSVE < 1) {
+      warning("StringCaseIntrinsicBackend=sve requires UseSVE >= 1. "
+              "Disabling String case intrinsics.");
+      FLAG_SET_DEFAULT(StringCaseIntrinsicBackend, string_case_off);
+    }
+    if (StringCaseIntrinsicBackend == string_case_sve2 &&
+        (UseSVE < 2 || !VM_Version::supports_svebitperm())) {
+      warning("StringCaseIntrinsicBackend=sve2 requires UseSVE >= 2 and "
+              "SVEBitPerm. Disabling String case intrinsics.");
+      FLAG_SET_DEFAULT(StringCaseIntrinsicBackend, string_case_off);
+    }
+  } else {
+    DISABLE_HISI_FLAG(UseHisiOptimizations);
+    DISABLE_HISI_FLAG(UseSIMDForStringEquals);
+    DISABLE_HISI_FLAG(UseUTFConversionIntrinsics);
+    DISABLE_HISI_FLAG(UseStlrForRelease);
+    DISABLE_HISI_FLAG(UseSVEHashCodeIntrinsic);
+    DISABLE_HISI_FLAG(UseStringEqualsIgnoreCaseIntrinsic);
+    DISABLE_HISI_FLAG(UseStreamPrefetchForArrayCopy);
+    DISABLE_HISI_FLAG(UseSVESmallBlockZeroing);
+    DISABLE_HISI_FLAG(UseLSEPrefetch);
+    DISABLE_HISI_FLAG_VALUE(StringCaseIntrinsicBackend, string_case_off);
+  }
+#undef ENABLE_HISI_FLAG_BY_DEFAULT
+#undef DISABLE_HISI_FLAG
+#undef DISABLE_HISI_FLAG_VALUE
+
+  if (UseSIMDForStringEquals && (!UseSIMDForArrayEquals || UseSimpleArrayEquals)) {
+    if (!FLAG_IS_DEFAULT(UseSIMDForStringEquals)) {
+      warning("UseSIMDForStringEquals specified, but requires UseSIMDForArrayEquals and "
+              "disabled UseSimpleArrayEquals. Disabling.");
+    }
+    FLAG_SET_DEFAULT(UseSIMDForStringEquals, false);
+  }
+
+  if (UseStreamPrefetchForArrayCopy && AvoidUnalignedAccesses) {
+    if (!FLAG_IS_DEFAULT(UseStreamPrefetchForArrayCopy)) {
+      warning("UseStreamPrefetchForArrayCopy specified, but requires disabled "
+              "AvoidUnalignedAccesses. Disabling.");
+    }
+    FLAG_SET_DEFAULT(UseStreamPrefetchForArrayCopy, false);
+  }
+
+  if (UseSVESmallBlockZeroing && UseSVE == 0) {
+    if (!FLAG_IS_DEFAULT(UseSVESmallBlockZeroing)) {
+      warning("UseSVESmallBlockZeroing specified, but requires UseSVE > 0. Disabling.");
+    }
+    FLAG_SET_DEFAULT(UseSVESmallBlockZeroing, false);
+  }
+
+  if (UseSVEHashCodeIntrinsic && !UseVectorizedHashCodeIntrinsic) {
+    warning("UseSVEHashCodeIntrinsic specified, but requires "
+            "-XX:+UseVectorizedHashCodeIntrinsic. Disabling.");
+    FLAG_SET_DEFAULT(UseSVEHashCodeIntrinsic, false);
+  }
 }
 
 #if defined(LINUX)

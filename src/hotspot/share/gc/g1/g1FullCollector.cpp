@@ -225,7 +225,9 @@ void G1FullCollector::collect() {
 
   phase5_reset_metadata();
 
+#ifndef AARCH64
   G1CollectedHeap::finish_codecache_marking_cycle();
+#endif // !AARCH64
 }
 
 void G1FullCollector::complete_collection(size_t allocation_word_size) {
@@ -246,7 +248,9 @@ void G1FullCollector::complete_collection(size_t allocation_word_size) {
 
   _heap->resize_all_tlabs();
 
+#ifndef AARCH64
   _heap->young_regions_cset_group()->clear();
+#endif // !AARCH64
 
   _heap->policy()->record_full_collection_end();
   _heap->gc_epilogue(true);

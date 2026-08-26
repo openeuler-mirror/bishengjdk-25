@@ -25,6 +25,9 @@
 #include "cds/aotLogging.hpp"
 #include "cds/cds_globals.hpp"
 #include "cds/cdsConfig.hpp"
+#ifdef AARCH64
+#include "classfile/bytecodeEnhancement.hpp"
+#endif
 #include "classfile/classLoader.hpp"
 #include "classfile/javaAssertions.hpp"
 #include "classfile/moduleEntry.hpp"
@@ -560,6 +563,9 @@ static SpecialFlag const special_jvm_flags[] = {
   { "MetaspaceReclaimPolicy",       JDK_Version::undefined(), JDK_Version::jdk(21), JDK_Version::undefined() },
   { "ZGenerational",                JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::undefined() },
   { "ZMarkStackSpaceLimit",         JDK_Version::undefined(), JDK_Version::jdk(25), JDK_Version::undefined() },
+#ifdef AARCH64
+  { "G1UpdateBufferSize",           JDK_Version::undefined(), JDK_Version::jdk(26), JDK_Version::jdk(27) },
+#endif // AARCH64
 #if defined(AARCH64)
   { "NearCpool",                    JDK_Version::undefined(), JDK_Version::jdk(25), JDK_Version::undefined() },
 #endif
@@ -3871,6 +3877,10 @@ jint Arguments::apply_ergo(JavaVMInitArgs* args) {
   if (UseCompressedClassPointers) {
     CompressedKlassPointers::pre_initialize();
   }
+
+  AARCH64_ONLY(if (BytecodeEnhancementPaths != nullptr || UsePrimitiveHashSet) {
+    BytecodeEnhancement::enable();
+  })
 
   CDSConfig::ergo_initialize();
 

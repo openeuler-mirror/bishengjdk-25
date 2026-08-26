@@ -28,6 +28,13 @@
 #include "runtime/flags/jvmFlag.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+#ifndef AARCH64
+#define G1_UPDATE_BUFFER_SIZE_CONSTRAINT(f)             \
+  f(size_t, G1UpdateBufferSizeConstraintFunc)
+#else
+#define G1_UPDATE_BUFFER_SIZE_CONSTRAINT(f)
+#endif // !AARCH64
+
 #define G1_GC_CONSTRAINTS(f)                          \
                                                       \
   /* G1 Remembered Sets Constraints */                \
@@ -47,7 +54,8 @@
                                                       \
   /* G1 PtrQueue buffer size constraints */           \
   f(size_t, G1SATBBufferSizeConstraintFunc)           \
-  f(size_t, G1UpdateBufferSizeConstraintFunc)         \
+  G1_UPDATE_BUFFER_SIZE_CONSTRAINT(f)                 \
+                                                      \
   /* */
 
 G1_GC_CONSTRAINTS(DECLARE_CONSTRAINT)
