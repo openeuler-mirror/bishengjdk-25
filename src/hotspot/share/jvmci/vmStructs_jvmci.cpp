@@ -502,12 +502,12 @@
 #define VM_INT_CONSTANTS_CARD_TABLE_AARCH64(declare_constant_with_value)
 #endif // AARCH64
 
-#ifndef AARCH64
+#ifdef AARCH64
+#define VM_ADDRESSES_G1_NON_AARCH64(declare_function)
+#else // AARCH64
 #define VM_ADDRESSES_G1_NON_AARCH64(declare_function)                          \
   G1GC_ONLY(declare_function(JVMCIRuntime::write_barrier_post))
-#else
-#define VM_ADDRESSES_G1_NON_AARCH64(declare_function)
-#endif // !AARCH64
+#endif // AARCH64
 
 #ifdef AARCH64
 #define VM_INT_CONSTANTS_JVMCI_G1GC_AARCH64(declare_constant_with_value)        \

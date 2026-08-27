@@ -91,38 +91,6 @@
 // Defines all globals flags used by the garbage-first compiler.
 //
 
-#ifdef AARCH64
-#define GC_G1_SATB_BUFFER_SIZE_CONSTRAINT(constraint)                         \
-          constraint(G1SATBBufferSizeConstraintFunc, AfterErgo)
-#else
-#define GC_G1_SATB_BUFFER_SIZE_CONSTRAINT(constraint)                         \
-          constraint(G1SATBBufferSizeConstraintFunc, AtParse)
-#endif // AARCH64
-
-#ifdef AARCH64
-#define GC_G1_PENDING_CARD_FLAGS(product, range, constraint)                  \
-  product(size_t, G1PerThreadPendingCardThreshold, 256, DIAGNOSTIC,           \
-          "Number of pending cards allowed on the card table per GC "         \
-          "worker thread before considering starting refinement.")            \
-          range(0, UINT_MAX)
-#else
-#define GC_G1_PENDING_CARD_FLAGS(product, range, constraint)                  \
-  product(size_t, G1UpdateBufferSize, 256,                                    \
-          "Size of an update buffer")                                         \
-          constraint(G1UpdateBufferSizeConstraintFunc, AtParse)
-#endif // AARCH64
-
-#ifdef AARCH64
-#define GC_G1_OPTIONAL_EVACUATION_FLAGS(develop)                              \
-  develop(bool, G1ForceOptionalEvacuation, false,                             \
-          "Force optional evacuation for all GCs where there are old gen "    \
-          "collection set candidates."                                        \
-          "Also schedule all available optional groups for evacuation "       \
-          "regardless of timing.")
-#else
-#define GC_G1_OPTIONAL_EVACUATION_FLAGS(develop)
-#endif // AARCH64
-
 #define GC_G1_FLAGS(develop,                                                \
                     develop_pd,                                             \
                     product,                                                \
@@ -176,7 +144,10 @@
                                                                             \
   product(size_t, G1SATBBufferSize, 1*K,                                    \
           "Number of entries in an SATB log buffer.")                       \
-          GC_G1_SATB_BUFFER_SIZE_CONSTRAINT(constraint)                     \
+          AARCH64_ONLY(                                                     \
+            constraint(G1SATBBufferSizeConstraintFunc, AfterErgo))          \
+          NOT_AARCH64(                                                      \
+            constraint(G1SATBBufferSizeConstraintFunc, AtParse))            \
                                                                             \
   develop(uintx, G1SATBProcessCompletedThreshold, 20,                       \
           "Number of completed buffers that triggers log processing.")      \
@@ -193,7 +164,13 @@
           "When expanding, % of uncommitted space to claim.")               \
           range(0, 100)                                                     \
                                                                             \
-  GC_G1_PENDING_CARD_FLAGS(product, range, constraint)                    \
+  AARCH64_ONLY(product(size_t, G1PerThreadPendingCardThreshold, 256,        \
+          DIAGNOSTIC, "Number of pending cards allowed on the card table "  \
+          "per GC worker thread before considering starting refinement.")   \
+          range(0, UINT_MAX))                                               \
+  NOT_AARCH64(product(size_t, G1UpdateBufferSize, 256,                      \
+          "Size of an update buffer")                                       \
+          constraint(G1UpdateBufferSizeConstraintFunc, AtParse))            \
                                                                             \
   product(uint, G1RSetUpdatingPauseTimePercent, 10,                         \
           "A target percentage of time that is allowed to be spend on "     \
@@ -373,7 +350,11 @@
           "scan cost related prediction samples. A sample must involve "    \
           "the same or more than this number of code roots to be used.")    \
                                                                             \
-  GC_G1_OPTIONAL_EVACUATION_FLAGS(develop)                                \
+  AARCH64_ONLY(develop(bool, G1ForceOptionalEvacuation, false,              \
+          "Force optional evacuation for all GCs where there are old gen "  \
+          "collection set candidates."                                      \
+          "Also schedule all available optional groups for evacuation "     \
+          "regardless of timing."))                                         \
                                                                             \
   GC_G1_EVACUATION_FAILURE_FLAGS(develop,                                   \
                     develop_pd,                                             \
