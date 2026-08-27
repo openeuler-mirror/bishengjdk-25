@@ -28,12 +28,12 @@
 #include "runtime/flags/jvmFlag.hpp"
 #include "utilities/globalDefinitions.hpp"
 
-#ifndef AARCH64
+#ifdef AARCH64
+#define G1_UPDATE_BUFFER_SIZE_CONSTRAINT(f)
+#else // AARCH64
 #define G1_UPDATE_BUFFER_SIZE_CONSTRAINT(f)             \
   f(size_t, G1UpdateBufferSizeConstraintFunc)
-#else
-#define G1_UPDATE_BUFFER_SIZE_CONSTRAINT(f)
-#endif // !AARCH64
+#endif // AARCH64
 
 #define G1_GC_CONSTRAINTS(f)                          \
                                                       \

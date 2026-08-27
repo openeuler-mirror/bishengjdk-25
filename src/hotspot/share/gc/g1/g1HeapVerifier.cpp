@@ -252,10 +252,10 @@ public:
 
   bool do_heap_region(G1HeapRegion* r) {
     guarantee(!r->has_index_in_opt_cset(), "Region %u still has opt collection set index %u", r->hrm_index(), r->index_in_opt_cset());
-#ifndef AARCH64
-    guarantee(!r->is_young() || r->rem_set()->is_complete(), "Remembered set for Young region %u must be complete, is %s", r->hrm_index(), r->rem_set()->get_state_str());
-#else // AARCH64
+#ifdef AARCH64
     guarantee(is_in_full_gc() || !r->is_young() || r->rem_set()->is_complete(), "Remembered set for Young region %u must be complete outside full gc, is %s", r->hrm_index(), r->rem_set()->get_state_str());
+#else // AARCH64
+    guarantee(!r->is_young() || r->rem_set()->is_complete(), "Remembered set for Young region %u must be complete, is %s", r->hrm_index(), r->rem_set()->get_state_str());
 #endif // AARCH64
     // Humongous and old regions regions might be of any state, so can't check here.
     guarantee(!r->is_free() || !r->rem_set()->is_tracked(), "Remembered set for free region %u must be untracked, is %s", r->hrm_index(), r->rem_set()->get_state_str());
@@ -567,72 +567,7 @@ void G1HeapVerifier::verify_bitmap_clear(bool from_tams) {
   G1CollectedHeap::heap()->heap_region_iterate(&cl);
 }
 
-#ifndef AARCH64
-#ifndef PRODUCT
-class G1VerifyCardTableCleanup: public G1HeapRegionClosure {
-  G1HeapVerifier* _verifier;
-public:
-  G1VerifyCardTableCleanup(G1HeapVerifier* verifier)
-    : _verifier(verifier) { }
-  virtual bool do_heap_region(G1HeapRegion* r) {
-    if (r->is_survivor()) {
-      _verifier->verify_dirty_region(r);
-    } else {
-      _verifier->verify_not_dirty_region(r);
-    }
-    return false;
-  }
-};
-
-void G1HeapVerifier::verify_card_table_cleanup() {
-  if (VerifyAfterGC) {
-    G1VerifyCardTableCleanup cleanup_verifier(this);
-    _g1h->heap_region_iterate(&cleanup_verifier);
-  }
-}
-
-void G1HeapVerifier::verify_not_dirty_region(G1HeapRegion* hr) {
-  // All of the region should be clean.
-  G1CardTable* ct = _g1h->card_table();
-  MemRegion mr(hr->bottom(), hr->end());
-  ct->verify_not_dirty_region(mr);
-}
-
-void G1HeapVerifier::verify_dirty_region(G1HeapRegion* hr) {
-  // We cannot guarantee that [bottom(),end()] is dirty.  Threads
-  // dirty allocated blocks as they allocate them. The thread that
-  // retires each region and replaces it with a new one will do a
-  // maximal allocation to fill in [pre_dummy_top(),end()] but will
-  // not dirty that area (one less thing to have to do while holding
-  // a lock). So we can only verify that [bottom(),pre_dummy_top()]
-  // is dirty.
-  G1CardTable* ct = _g1h->card_table();
-  MemRegion mr(hr->bottom(), hr->pre_dummy_top());
-  if (hr->is_young()) {
-    ct->verify_g1_young_region(mr);
-  } else {
-    ct->verify_dirty_region(mr);
-  }
-}
-
-class G1VerifyDirtyYoungListClosure : public G1HeapRegionClosure {
-private:
-  G1HeapVerifier* _verifier;
-public:
-  G1VerifyDirtyYoungListClosure(G1HeapVerifier* verifier) : G1HeapRegionClosure(), _verifier(verifier) { }
-  virtual bool do_heap_region(G1HeapRegion* r) {
-    _verifier->verify_dirty_region(r);
-    return false;
-  }
-};
-
-void G1HeapVerifier::verify_dirty_young_regions() {
-  G1VerifyDirtyYoungListClosure cl(this);
-  _g1h->collection_set()->iterate(&cl);
-}
-
-#endif // PRODUCT
-#else // AARCH64
+#ifdef AARCH64
 class G1VerifyCardTableCleanup: public G1HeapRegionClosure {
   G1HeapVerifier* _verifier;
 public:
@@ -742,6 +677,71 @@ void G1HeapVerifier::verify_card_tables_in_sync() {
     } check_same_cl;
 
     Threads::java_threads_do(&check_same_cl);
+}
+
+#endif // PRODUCT
+#else // AARCH64
+#ifndef PRODUCT
+class G1VerifyCardTableCleanup: public G1HeapRegionClosure {
+  G1HeapVerifier* _verifier;
+public:
+  G1VerifyCardTableCleanup(G1HeapVerifier* verifier)
+    : _verifier(verifier) { }
+  virtual bool do_heap_region(G1HeapRegion* r) {
+    if (r->is_survivor()) {
+      _verifier->verify_dirty_region(r);
+    } else {
+      _verifier->verify_not_dirty_region(r);
+    }
+    return false;
+  }
+};
+
+void G1HeapVerifier::verify_card_table_cleanup() {
+  if (VerifyAfterGC) {
+    G1VerifyCardTableCleanup cleanup_verifier(this);
+    _g1h->heap_region_iterate(&cleanup_verifier);
+  }
+}
+
+void G1HeapVerifier::verify_not_dirty_region(G1HeapRegion* hr) {
+  // All of the region should be clean.
+  G1CardTable* ct = _g1h->card_table();
+  MemRegion mr(hr->bottom(), hr->end());
+  ct->verify_not_dirty_region(mr);
+}
+
+void G1HeapVerifier::verify_dirty_region(G1HeapRegion* hr) {
+  // We cannot guarantee that [bottom(),end()] is dirty.  Threads
+  // dirty allocated blocks as they allocate them. The thread that
+  // retires each region and replaces it with a new one will do a
+  // maximal allocation to fill in [pre_dummy_top(),end()] but will
+  // not dirty that area (one less thing to have to do while holding
+  // a lock). So we can only verify that [bottom(),pre_dummy_top()]
+  // is dirty.
+  G1CardTable* ct = _g1h->card_table();
+  MemRegion mr(hr->bottom(), hr->pre_dummy_top());
+  if (hr->is_young()) {
+    ct->verify_g1_young_region(mr);
+  } else {
+    ct->verify_dirty_region(mr);
+  }
+}
+
+class G1VerifyDirtyYoungListClosure : public G1HeapRegionClosure {
+private:
+  G1HeapVerifier* _verifier;
+public:
+  G1VerifyDirtyYoungListClosure(G1HeapVerifier* verifier) : G1HeapRegionClosure(), _verifier(verifier) { }
+  virtual bool do_heap_region(G1HeapRegion* r) {
+    _verifier->verify_dirty_region(r);
+    return false;
+  }
+};
+
+void G1HeapVerifier::verify_dirty_young_regions() {
+  G1VerifyDirtyYoungListClosure cl(this);
+  _g1h->collection_set()->iterate(&cl);
 }
 
 #endif // PRODUCT

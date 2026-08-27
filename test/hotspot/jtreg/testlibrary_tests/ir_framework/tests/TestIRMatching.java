@@ -1486,7 +1486,8 @@ class CompilationOutputOfFails {
 
     @Test
     @IR(failOn = IRNode.ALLOC)
-    @IR(counts = {IRNode.COUNTED_LOOP, ">1"}) // not fail
+    @IR(counts = {IRNode.COUNTED_LOOP, ">1"}, applyIfPlatform = {"aarch64", "true"}) // not fail
+    @IR(counts = {IRNode.COUNTED_LOOP, "1"}, applyIfPlatform = {"aarch64", "false"}) // not fail
     public void macro3() {
         for (int i = 0; i < 100; i++) {
             obj = new Object();
