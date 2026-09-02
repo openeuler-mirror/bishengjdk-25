@@ -1315,8 +1315,8 @@ static void pthread_init_common(void) {
 
 // This means we have clockid_t, clock_gettime et al and CLOCK_MONOTONIC
 
-int (*os::Posix::_clock_gettime)(clockid_t, struct timespec *) = NULL;
-int (*os::Posix::_clock_getres)(clockid_t, struct timespec *) = NULL;
+int (*os::Posix::_clock_gettime)(clockid_t, struct timespec *) = nullptr;
+int (*os::Posix::_clock_getres)(clockid_t, struct timespec *) = nullptr;
 
 bool os::Posix::_supports_monotonic_clock = false;
 

@@ -4775,22 +4775,22 @@ void os::Linux::load_ACC_library() {
     }
 #endif // INCLUDE_JBOLT
 
-    if(_heap_dict_add == NULL) {
+    if(_heap_dict_add == nullptr) {
       _heap_dict_add = CAST_TO_FN_PTR(heap_dict_add_t, dlsym(handle, "HeapDict_Add"));
     }
-    if(_heap_dict_lookup == NULL) {
+    if(_heap_dict_lookup == nullptr) {
       _heap_dict_lookup = CAST_TO_FN_PTR(heap_dict_lookup_t, dlsym(handle, "HeapDict_Lookup"));
     }
-    if(_heap_dict_free == NULL) {
+    if(_heap_dict_free == nullptr) {
       _heap_dict_free = CAST_TO_FN_PTR(heap_dict_free_t, dlsym(handle, "HeapDict_Free"));
     }
-    if(_heap_vector_add == NULL) {
+    if(_heap_vector_add == nullptr) {
       _heap_vector_add = CAST_TO_FN_PTR(heap_vector_add_t, dlsym(handle, "HeapVector_Add"));
     }
-    if(_heap_vector_get_next == NULL) {
+    if(_heap_vector_get_next == nullptr) {
       _heap_vector_get_next = CAST_TO_FN_PTR(heap_vector_get_next_t, dlsym(handle, "HeapVector_GetNext"));
     }
-    if(_heap_vector_free == NULL) {
+    if(_heap_vector_free == nullptr) {
       _heap_vector_free= CAST_TO_FN_PTR(heap_vector_free_t, dlsym(handle, "HeapVector_Free"));
     }
   }

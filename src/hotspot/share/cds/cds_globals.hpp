@@ -179,7 +179,7 @@
   develop(bool, TestAOTAdapterLinkFailure, false,                           \
           "Test failure of adapter linking when loading from AOT cache.")   \
                                                                             \
-  product(ccstr, AutoSharedArchivePath, NULL,                               \
+  product(ccstr, AutoSharedArchivePath, nullptr,                               \
           "Auto enable the AppCDS feature"                                  \
           "the path save classlist and jsa file")                           \
                                                                             \

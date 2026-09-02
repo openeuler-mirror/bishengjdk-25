@@ -288,11 +288,11 @@ methodHandle JBoltManager::lookup_method(InstanceKlass* klass, traceid method_id
   }
 
   const Method* const lookup_method = JfrMethodLookup::lookup(klass, method_id);
-  if (lookup_method == NULL) {
+  if (lookup_method == nullptr) {
     // stacktrace obsolete
     return methodHandle();
   }
-  assert(lookup_method != NULL, "invariant");
+  assert(lookup_method != nullptr, "invariant");
   methodHandle method(thread, const_cast<Method*>(lookup_method));
 
   return method;
@@ -326,7 +326,7 @@ void JBoltManager::construct_stacktrace(const JfrStackTrace& stacktrace) {
 
   os::Linux::jboltLog_precalc(topFrameIndex, max_frames);
 
-  JBoltFunc **tempfunc = NULL;
+  JBoltFunc **tempfunc = nullptr;
   GrowableArray<JBoltFunc*>* funcs = create_growable_array<JBoltFunc*>();
 
   for (u4 i = 0; i < max_frames; ++i) {
@@ -344,18 +344,18 @@ void JBoltManager::construct_stacktrace(const JfrStackTrace& stacktrace) {
       frame.get_byteCodeIndex(),
       method->external_name(),
       method_type_to_string(frame.get_type()),
-      compiled != NULL ? compiled->compiler_name() : "None",
-      compiled != NULL ? compiled->comp_level() : -1,
-      compiled != NULL ? compiled->size() : 0);
+      compiled != nullptr ? compiled->compiler_name() : "None",
+      compiled != nullptr ? compiled->comp_level() : -1,
+      compiled != nullptr ? compiled->size() : 0);
 
-    if (compiled == NULL) break;
+    if (compiled == nullptr) break;
 
     JBoltMethodKey method_key(method->constants()->pool_holder()->name(), method->name(), method->signature());
     JBoltFunc* func = JBoltFunc::constructor(frame.get_klass(), frame.get_methodId(), compiled->size(), method_key);
 
     if (!os::Linux::jboltLog_do(related_data_jbolt, (address)&stacktrace, i, compiled->comp_level(), (address)func, (address*)&tempfunc)) {
       delete func;
-      func = NULL;
+      func = nullptr;
       break;
     }
     funcs->append(func);
@@ -425,7 +425,7 @@ static void write_order(const GrowableArray<JBoltFunc>* order, fileStream& fs) {
 
   for (int i = 0; i < order->length(); ++i) {
     const JBoltFunc& func = order->at(i);
-    if (func.klass() == NULL) {
+    if (func.klass() == nullptr) {
       fs.write(segmentor, strlen(segmentor));
       continue;
     }
@@ -465,7 +465,7 @@ void JBoltManager::dump_order_in_manual() {
 
   fileStream orderFile(JBoltOrderFile, "w+");
 
-  if (JBoltOrderFile == NULL || !orderFile.is_open()) {
+  if (JBoltOrderFile == nullptr || !orderFile.is_open()) {
     log_error(jbolt)("JBoltOrderFile open error");
     vm_exit_during_initialization("JBoltOrderFile open error");
   }
@@ -489,7 +489,7 @@ JBoltErrorCode JBoltManager::dump_order_in_jcmd(const char* filename) {
 
   fileStream orderFile(filename, "w+");
 
-  if (filename == NULL || !orderFile.is_open()) return JBoltOpenFileError;
+  if (filename == nullptr || !orderFile.is_open()) return JBoltOpenFileError;
 
   write_order(_order_stored, orderFile);
 
@@ -786,7 +786,7 @@ void JBoltManager::init_auto_transition(size_t* segment_size, TRAPS) {
   size_t seg_size = 0;
   for (int i = 0; i < order->length(); ++i) {
     const JBoltFunc& func = order->at(i);
-    if (func.klass() == NULL) {
+    if (func.klass() == nullptr) {
       continue;
     }
 
@@ -1268,7 +1268,7 @@ bool JBoltManager::enqueue_recompile_task(CompileTaskInfo* cti, methodHandle& me
 
     task = create_a_task_instance(cti, method, CHECK_AND_CLEAR_false);
     if (task == nullptr) {
-      log_warning(jbolt)("JBOLT won't compile as \"task instance is NULL\": method=%s.", method->name_and_sig_as_C_string());
+      log_warning(jbolt)("JBOLT won't compile as \"task instance is nullptr\": method=%s.", method->name_and_sig_as_C_string());
       return false;
     }
     queue->add(task);

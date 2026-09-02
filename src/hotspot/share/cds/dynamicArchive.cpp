@@ -568,11 +568,11 @@ bool DynamicArchive::validate(FileMapInfo* dynamic_info) {
 int DynamicArchiveHeader::get_current_program_crc() {
   int cur_crc = 0;
   const char* full_cmd = Arguments::java_command();
-  if (full_cmd == NULL) {
+  if (full_cmd == nullptr) {
     return 0;
   }
   const char* main_path = Arguments::get_appclasspath();
-  if (main_path == NULL || main_path[0] == '\0') {
+  if (main_path == nullptr || main_path[0] == '\0') {
     // No appclasspath (e.g. -m / --module main, or no -cp specified) - nothing to CRC.
     return 0;
   }

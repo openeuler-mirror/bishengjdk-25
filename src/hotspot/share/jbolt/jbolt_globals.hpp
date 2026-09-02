@@ -42,7 +42,7 @@
   product(bool, JBoltLoadMode, false, EXPERIMENTAL,                         \
           "Second run of JBolt. Load the profiling and reorder nmethods.")  \
                                                                             \
-  product(ccstr, JBoltOrderFile, NULL, EXPERIMENTAL,                        \
+  product(ccstr, JBoltOrderFile, nullptr, EXPERIMENTAL,                        \
           "The JBolt method order file to dump or load.")                   \
                                                                             \
   product(intx, JBoltSampleInterval, 600, EXPERIMENTAL,                     \

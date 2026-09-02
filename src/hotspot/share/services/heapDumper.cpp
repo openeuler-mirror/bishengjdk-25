@@ -2881,7 +2881,7 @@ void DumperSupport::do_heapVector(AbstractDumpWriter* writer) {
         writer->end_sub_record();
       }
 
-      // clear current node info, maybe next node items is NULL, node_len = 0 will skip this NULL point error
+      // clear current node info, maybe next node items is nullptr, node_len = 0 will skip this nullptr point error
       node_len = 0;
       items = nullptr;
       void *temp = writer->heapRedactor()->get_vector_node_next(vector_node, node_len, items, container_index);

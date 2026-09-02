@@ -543,53 +543,53 @@ class os::Linux {
 #endif // GLIBC
 
   static bitmask* numa_parse_nodestring_all(const char* s) {
-    return _numa_parse_nodestring_all != NULL ? _numa_parse_nodestring_all(s) : NULL;
+    return _numa_parse_nodestring_all != nullptr ? _numa_parse_nodestring_all(s) : nullptr;
   }
 
   static int numa_num_configured_cpus() {
-    return _numa_num_configured_cpus != NULL ? _numa_num_configured_cpus() : 0;
+    return _numa_num_configured_cpus != nullptr ? _numa_num_configured_cpus() : 0;
   }
 
   static bitmask* numa_allocate_cpumask() {
-    return _numa_allocate_cpumask != NULL ? _numa_allocate_cpumask() : NULL;
+    return _numa_allocate_cpumask != nullptr ? _numa_allocate_cpumask() : nullptr;
   }
 
   static bitmask* numa_allocate_nodemask() {
-    return _numa_allocate_nodemask != NULL ? _numa_allocate_nodemask() : NULL;
+    return _numa_allocate_nodemask != nullptr ? _numa_allocate_nodemask() : nullptr;
   }
 
   static int numa_sched_setaffinity(int pid, struct bitmask* mask) {
-    return _numa_sched_setaffinity != NULL ? _numa_sched_setaffinity(pid, mask) : -1;
+    return _numa_sched_setaffinity != nullptr ? _numa_sched_setaffinity(pid, mask) : -1;
   }
 
   static int numa_bitmask_nbytes(struct bitmask* mask) {
-    return _numa_bitmask_nbytes != NULL ? _numa_bitmask_nbytes(mask) : 0;
+    return _numa_bitmask_nbytes != nullptr ? _numa_bitmask_nbytes(mask) : 0;
   }
 
   static bitmask* numa_bitmask_setbit(struct bitmask* mask, int len) {
-    return _numa_bitmask_setbit != NULL ? _numa_bitmask_setbit(mask, len) : NULL;
+    return _numa_bitmask_setbit != nullptr ? _numa_bitmask_setbit(mask, len) : nullptr;
   }
 
   static bitmask* numa_bitmask_clearall(struct bitmask* mask) {
-    return _numa_bitmask_clearall != NULL ? _numa_bitmask_clearall(mask) : NULL;
+    return _numa_bitmask_clearall != nullptr ? _numa_bitmask_clearall(mask) : nullptr;
   }
 
   static int numa_run_on_node_mask(bitmask* bitmask) {
-    return _numa_run_on_node_mask != NULL ? _numa_run_on_node_mask(bitmask) : -1;
+    return _numa_run_on_node_mask != nullptr ? _numa_run_on_node_mask(bitmask) : -1;
   }
 
   static int numa_bitmask_equal(bitmask* bitmask, struct bitmask* bitmask1) {
-    return _numa_bitmask_equal != NULL ? _numa_bitmask_equal(bitmask, bitmask1) : 1;
+    return _numa_bitmask_equal != nullptr ? _numa_bitmask_equal(bitmask, bitmask1) : 1;
   }
 
   static void numa_set_membind(bitmask* bitmask) {
-    if (_numa_set_membind != NULL) {
+    if (_numa_set_membind != nullptr) {
       _numa_set_membind(bitmask);
     }
   }
 
   static void numa_bitmask_free(bitmask* bitmask) {
-    if (_numa_bitmask_free != NULL) {
+    if (_numa_bitmask_free != nullptr) {
       _numa_bitmask_free(bitmask);
     }
   }
@@ -615,41 +615,41 @@ class os::Linux {
 #endif // INCLUDE_JBOLT
 
   static void* heap_dict_add(void* key, void* val, void* heap_dict, uint8_t type) {
-      if(_heap_dict_add == NULL) {
-          return NULL;
+      if(_heap_dict_add == nullptr) {
+          return nullptr;
       }
       return _heap_dict_add(key, val, heap_dict, type);
   }
 
   static void* heap_dict_lookup(void* key, void* heap_dict, bool deletable) {
-      if(_heap_dict_lookup == NULL) {
-          return NULL;
+      if(_heap_dict_lookup == nullptr) {
+          return nullptr;
       }
       return _heap_dict_lookup(key, heap_dict, deletable);
   };
 
   static void heap_dict_free(void* heap_dict, bool is_nested) {
-      if(_heap_dict_free != NULL) {
+      if(_heap_dict_free != nullptr) {
           _heap_dict_free(heap_dict, is_nested);
       }
   }
 
   static void* heap_vector_add(void* val, void* heap_vector, bool &_inserted) {
-      if(_heap_vector_add == NULL) {
-          return NULL;
+      if(_heap_vector_add == nullptr) {
+          return nullptr;
       }
      return _heap_vector_add(val, heap_vector, _inserted);
   }
   
   static void* heap_vector_get_next(void* heap_vector, void* heap_vector_node, int &_cnt, void** &_items) {
-      if(_heap_vector_get_next == NULL) {
-          return NULL;
+      if(_heap_vector_get_next == nullptr) {
+          return nullptr;
       }
       return _heap_vector_get_next(heap_vector, heap_vector_node, _cnt, _items);
   }
 
   static void heap_vector_free(void* heap_vector) {
-      if(_heap_vector_free != NULL) {
+      if(_heap_vector_free != nullptr) {
           _heap_vector_free(heap_vector);
       }
   }

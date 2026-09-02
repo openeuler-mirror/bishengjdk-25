@@ -35,9 +35,9 @@
 
 #define PAGE_SIZE os::vm_page_size()
 
-static GrowableArray<JBoltCluster>* _clusters = NULL;
-static GrowableArray<JBoltCall>* _calls = NULL;
-static GrowableArray<JBoltFunc>* _funcs = NULL;
+static GrowableArray<JBoltCluster>* _clusters = nullptr;
+static GrowableArray<JBoltCall>* _calls = nullptr;
+static GrowableArray<JBoltFunc>* _funcs = nullptr;
 
 // (JBolt hfsort optional)sort final clusters by density
 static const bool _jbolt_density_sort = false;
@@ -51,9 +51,9 @@ void JBoltCallGraph::initialize() {
 }
 
 void JBoltCallGraph::deinitialize() {
-  ::_clusters = NULL;
-  ::_calls = NULL;
-  ::_funcs = NULL;
+  ::_clusters = nullptr;
+  ::_calls = nullptr;
+  ::_funcs = nullptr;
 }
 
 int JBoltCallGraph::clear_instance() {
@@ -144,7 +144,7 @@ static GrowableArray<JBoltFunc>* clusters_to_funcs_order(GrowableArray<JBoltClus
     for (int j = 0; j < clusters->at(i).get_funcs_count(); ++j) {
         JBoltFunc& func = _funcs->at(clusters->at(i).func_indexes()->at(j));
         const Method* const method = JfrMethodLookup::lookup(func.klass(), func.method_id());
-        if (method != NULL) {
+        if (method != nullptr) {
           log_debug(jbolt)( "%d: method signature:%s heat: %ld size: %dB\n",
             j, method->external_name(), func.heat(), func.size());
         }
@@ -152,7 +152,7 @@ static GrowableArray<JBoltFunc>* clusters_to_funcs_order(GrowableArray<JBoltClus
   }
 
   GrowableArray<JBoltFunc>* order = create_growable_array<JBoltFunc>(_funcs->length());
-  // used to seperator distinct cluster, klass = NULL
+  // used to seperator distinct cluster, klass = nullptr
   JBoltFunc seperator_func;
   order->append(seperator_func);
   for (int i = 0; i < clusters->length(); ++i) {
@@ -191,7 +191,7 @@ JBoltCallGraph& JBoltCallGraph::callgraph_instance() {
 
 void JBoltCallGraph::add_func(JBoltFunc* func) {
   JBoltCluster* cluster = find_cluster(func);
-  assert(cluster != NULL, "invariant");
+  assert(cluster != nullptr, "invariant");
 }
 
 void JBoltCallGraph::add_call(JBoltCall* call) {
@@ -260,7 +260,7 @@ static void deal_with_each_func(GrowableArray<JBoltCluster>* clusters, GrowableA
 // Every node is a cluster with funcs
 // Initially each cluster has only one func inside
 GrowableArray<JBoltFunc>* JBoltCallGraph::hfsort() {
-  if (!(UseJBolt && (JBoltDumpMode || JBoltManager::auto_mode()))) return NULL;
+  if (!(UseJBolt && (JBoltDumpMode || JBoltManager::auto_mode()))) return nullptr;
   log_debug(jbolt)( "hfsort begin...\n");
   // Copies are needed for saving initial graph in memory
   GrowableArray<JBoltCluster>* clusters = clusters_copy();
@@ -301,7 +301,7 @@ GrowableArray<JBoltFunc>* JBoltCallGraph::hfsort() {
 }
 
 JBoltFunc::JBoltFunc() :
-  _klass(NULL),
+  _klass(nullptr),
   _method_id(0),
   _heat(0),
   _size(0),
@@ -421,7 +421,7 @@ void JBoltCluster::clear() {
 
 // Searching for a cluster by its id
 JBoltCluster* JBoltCluster::find_cluster_by_id(GrowableArray<JBoltCluster>* clusters, u4 id) {
-  if (id >= (u4)clusters->length()) return NULL;
+  if (id >= (u4)clusters->length()) return nullptr;
 
   return &(clusters->at(id));
 }

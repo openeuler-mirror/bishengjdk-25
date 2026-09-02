@@ -135,7 +135,7 @@ size_t JfrStackTraceRepository::write(JfrChunkWriter& sw, bool clear) {
 #if INCLUDE_JBOLT
     for (u4 i = 0; i < TABLE_SIZE; ++i) {
       JfrStackTrace* stacktrace = _table_jbolt[i];
-      while (stacktrace != NULL) {
+      while (stacktrace != nullptr) {
         JfrStackTrace* next = const_cast<JfrStackTrace*>(stacktrace->next());
         delete stacktrace;
         stacktrace = next;
@@ -173,7 +173,7 @@ size_t JfrStackTraceRepository::clear(JfrStackTraceRepository& repo) {
   if (repo._entries_jbolt != 0) {
     for (u4 i = 0; i < TABLE_SIZE; ++i) {
       JfrStackTrace* stacktrace = repo._table_jbolt[i];
-      while (stacktrace != NULL) {
+      while (stacktrace != nullptr) {
         JfrStackTrace* next = const_cast<JfrStackTrace*>(stacktrace->next());
         delete stacktrace;
         stacktrace = next;
@@ -277,7 +277,7 @@ size_t JfrStackTraceRepository::clear_jbolt(JfrStackTraceRepository& repo) {
 
   for (u4 i = 0; i < TABLE_SIZE; ++i) {
     JfrStackTrace* stacktrace = repo._table_jbolt[i];
-    while (stacktrace != NULL) {
+    while (stacktrace != nullptr) {
       JfrStackTrace* next = const_cast<JfrStackTrace*>(stacktrace->next());
       delete stacktrace;
       stacktrace = next;
@@ -318,7 +318,7 @@ traceid JfrStackTraceRepository::add_trace_jbolt(const JfrStackTrace& stacktrace
  
   if (UseJBolt && JBoltManager::reorder_phase_is_profiling()) {
     const JfrStackTrace* table_jbolt_entry = _table_jbolt[index];
-    while (table_jbolt_entry != NULL) {
+    while (table_jbolt_entry != nullptr) {
       if (table_jbolt_entry->equals(stacktrace)) {
         // [jbolt]: each time add an old trace, inc its hotcount
         const_cast<JfrStackTrace*>(table_jbolt_entry)->_hotcount++;

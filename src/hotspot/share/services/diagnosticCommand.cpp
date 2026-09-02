@@ -483,7 +483,7 @@ ChangeMaxHeapDCmd::ChangeMaxHeapDCmd(outputStream* output, bool heap) :
 }
 
 int ChangeMaxHeapDCmd::num_arguments(ChangeMaxHeapDCmd* dcmd) {
-  if (dcmd != NULL) {
+  if (dcmd != nullptr) {
     DCmdMark mark(dcmd);
     return dcmd->_dcmdparser.num_arguments();
   } else {
@@ -493,7 +493,7 @@ int ChangeMaxHeapDCmd::num_arguments(ChangeMaxHeapDCmd* dcmd) {
 
 int ChangeMaxHeapDCmd::num_arguments() {
   ResourceMark rm;
-  ChangeMaxHeapDCmd* dcmd = new ChangeMaxHeapDCmd(NULL, false);
+  ChangeMaxHeapDCmd* dcmd = new ChangeMaxHeapDCmd(nullptr, false);
   return ChangeMaxHeapDCmd::num_arguments(dcmd);
 }
 
@@ -539,7 +539,7 @@ ElasticMaxHeapDCmd::ElasticMaxHeapDCmd(outputStream* output, bool heap) :
 
 int ElasticMaxHeapDCmd::num_arguments() {
   ResourceMark rm;
-  ElasticMaxHeapDCmd* dcmd = new ElasticMaxHeapDCmd(NULL, false);
+  ElasticMaxHeapDCmd* dcmd = new ElasticMaxHeapDCmd(nullptr, false);
   return ChangeMaxHeapDCmd::num_arguments(dcmd);
 }
 
@@ -551,8 +551,8 @@ ElasticMaxDirectMemoryDCmd::ElasticMaxDirectMemoryDCmd(outputStream* output, boo
 
 int ElasticMaxDirectMemoryDCmd::num_arguments() {
   ResourceMark rm;
-  ElasticMaxDirectMemoryDCmd* dcmd = new ElasticMaxDirectMemoryDCmd(NULL, false);
-  if (dcmd != NULL) {
+  ElasticMaxDirectMemoryDCmd* dcmd = new ElasticMaxDirectMemoryDCmd(nullptr, false);
+  if (dcmd != nullptr) {
     DCmdMark mark(dcmd);
     return dcmd->_dcmdparser.num_arguments();
   } else {
@@ -581,9 +581,9 @@ void ElasticMaxDirectMemoryDCmd::execute(DCmdSource source, TRAPS) {
                          &args,
                          THREAD);
   oop msg = cast_to_oop(result.get_jobject());
-  if (msg != NULL) {
+  if (msg != nullptr) {
     char* text = java_lang_String::as_utf8_string(msg);
-    if (text != NULL) {
+    if (text != nullptr) {
       output()->print_cr("%s", text);
     }
   }
