@@ -443,7 +443,7 @@ static bool parse_bind_policy(const char* policy, const char* &prefix, int &div)
     if (!comma) break;
     p = comma + 1;
   }
-  if (prefix == NULL || div == 0) {
+  if (prefix == nullptr || div == 0) {
     if (LogNUMANodes) {
       warning("Lack of prefix/div. Feature disabled.");
     }
@@ -454,14 +454,14 @@ static bool parse_bind_policy(const char* policy, const char* &prefix, int &div)
 
 void os::Linux::chose_numa_nodes() {
   const char* numa_chosen_env = getenv("_JVM_NUMA_BINDING_DONE");
-  if (numa_chosen_env != NULL && strcmp(numa_chosen_env, "1") == 0) {
+  if (numa_chosen_env != nullptr && strcmp(numa_chosen_env, "1") == 0) {
     if (LogNUMANodes) {
       warning("NUMA binding already done (detected via environment variable), skipping");
     }
     return;
   }
 
-  if (NUMANodes == NULL && NUMANodesRandom == 0) {
+  if (NUMANodes == nullptr && NUMANodesRandom == 0) {
     if (LogNUMANodes) {
       warning("Numa binding will not work without NUMANodes or NUMANodesRandom.");
     }
@@ -483,14 +483,14 @@ void os::Linux::chose_numa_nodes() {
   bool user_specified_nodes[MAXNODE] = {false};
   bool has_user_constraint = false;
 
-  if (NUMANodes != NULL) {
+  if (NUMANodes != nullptr) {
     if (LogNUMANodes) {
       warning("NUMANodes parameter specified: %s", NUMANodes);
     }
 
     // Parse the nodestring
     bitmask* user_nodes_mask = os::Linux::numa_parse_nodestring_all(NUMANodes);
-    if (user_nodes_mask != NULL) {
+    if (user_nodes_mask != nullptr) {
       has_user_constraint = true;
       for (int i = 0; i < nodes_num; i++) {
         if (_numa_bitmask_isbitset(user_nodes_mask, i)) {
@@ -615,26 +615,26 @@ void os::Linux::chose_numa_nodes() {
   }
 
   const char* policy = NUMABindPolicy;
-  const char* process_prefix = NULL;
+  const char* process_prefix = nullptr;
   int process_div = 0;
 
   int random_number;
-  if (policy != NULL) {
+  if (policy != nullptr) {
     if (!parse_bind_policy(policy, process_prefix, process_div)) { 
       return;
     }
 
     if (LogNUMANodes) {
       warning("NUMABindPolicy: prefix=%s div=%d",
-              process_prefix != NULL ? process_prefix : "<null>",
+              process_prefix != nullptr ? process_prefix : "<null>",
               process_div);
     }
 
     int i = 0;
     int prefix_id = -1;
-    while (argv_for_execvp[i] != NULL) {
+    while (argv_for_execvp[i] != nullptr) {
       const char* arg = argv_for_execvp[i];
-      if (strcmp(arg, process_prefix) == 0 && argv_for_execvp[i + 1] != NULL) {
+      if (strcmp(arg, process_prefix) == 0 && argv_for_execvp[i + 1] != nullptr) {
         if (!is_non_negative_integer(argv_for_execvp[i + 1], &prefix_id)) {
           if (LogNUMANodes) {
             warning("Invalid prefix id, feature disabled.");

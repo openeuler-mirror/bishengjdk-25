@@ -72,9 +72,9 @@ int VM_Version::get_cpu_model() {
   int cpu_lines = 0;
   if (FILE *f = fopen("/proc/cpuinfo", "r")) {
     char buf[128], *p;
-    while (fgets(buf, sizeof (buf), f) != NULL) {
-      if ((p = strchr(buf, ':')) != NULL) {
-        long v = strtol(p+1, NULL, 0);
+    while (fgets(buf, sizeof (buf), f) != nullptr) {
+      if ((p = strchr(buf, ':')) != nullptr) {
+        long v = strtol(p+1, nullptr, 0);
         if (strncmp(buf, "CPU implementer", sizeof "CPU implementer" - 1) == 0) {
           _cpu = v;
           cpu_lines++;

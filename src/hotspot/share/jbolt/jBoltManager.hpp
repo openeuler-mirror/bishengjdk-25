@@ -153,7 +153,7 @@ class JBoltStackFrameKey : public StackObj {
 public:
   JBoltStackFrameKey(InstanceKlass* klass, traceid methodid): _klass(klass), _methodid(methodid) {}
   JBoltStackFrameKey(const JBoltStackFrameKey& other): _klass(other._klass), _methodid(other._methodid) {}
-  JBoltStackFrameKey(): _klass(NULL), _methodid(0) {}
+  JBoltStackFrameKey(): _klass(nullptr), _methodid(0) {}
   ~JBoltStackFrameKey() { /* nothing to do as _klass is a softcopy of JfrStackFrame::_klass */ }
 
 

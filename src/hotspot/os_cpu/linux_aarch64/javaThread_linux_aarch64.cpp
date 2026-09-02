@@ -105,7 +105,7 @@ void JavaThread::cache_global_variables() { }
 
 static char* get_java_executable_path() {
   const char* java_home = Arguments::get_property("java.home");
-  if (java_home != NULL) {
+  if (java_home != nullptr) {
     char* path = NEW_C_HEAP_ARRAY(char, MAXPATHLEN, mtInternal);
     jio_snprintf(path, MAXPATHLEN, "%s/bin/java", java_home);
     return path;
@@ -140,7 +140,7 @@ static void create_jsa_with_coop_option(const char* class_list_path, const char*
     setsid();
     signal(SIGHUP, SIG_IGN);
     const char* classpath = Arguments::get_appclasspath();
-    if (classpath == NULL) {
+    if (classpath == nullptr) {
       classpath = ".";
     }
     char* java_path = get_java_executable_path();
@@ -169,8 +169,8 @@ static void create_jsa_with_coop_option(const char* class_list_path, const char*
 
     // copy the original parameters and filter out the conflicting ones
     for (int i = 0; i < arg_count; i++) {
-      if (vm_args[i] != NULL && strstr(vm_args[i], "AutoSharedArchivePath") == NULL
-                             && strstr(vm_args[i], "UseCompressedOops") == NULL) {
+      if (vm_args[i] != nullptr && strstr(vm_args[i], "AutoSharedArchivePath") == nullptr
+                             && strstr(vm_args[i], "UseCompressedOops") == nullptr) {
         args[idx++] = os::strdup(vm_args[i]);
       }
     }
@@ -185,12 +185,12 @@ static void create_jsa_with_coop_option(const char* class_list_path, const char*
     }
 
     args[idx++] = os::strdup("-version");
-    args[idx] = NULL;
+    args[idx] = nullptr;
 
     if (PrintAutoAppCDS) {
       tty->print_cr("Creating JSA with UseCompressedOops=%s", use_compressed_oops ? "true" : "false");
       int i = 0;
-      while (args[i] != NULL) {
+      while (args[i] != nullptr) {
         tty->print_cr("args[%d] = %s", i, args[i]);
         i++;
       }
@@ -233,7 +233,7 @@ void JavaThread::handle_appcds_for_executor(const JavaVMInitArgs* args) {
     return;
   }
 
-  if (AutoSharedArchivePath == NULL) {
+  if (AutoSharedArchivePath == nullptr) {
     warning("AutoSharedArchivePath should not be empty. Please set the specific path.");
     return;
   }

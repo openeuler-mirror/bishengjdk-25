@@ -219,7 +219,7 @@ constexpr uint string_case_backend_value(StringCaseBackend backend) {
   product(bool, LogNUMANodes, false,                                    \
           "Print NUMANodes")                                            \
                                                                         \
-  product(ccstr, NUMANodes, NULL,                                       \
+  product(ccstr, NUMANodes, nullptr,                                       \
           "This parameter provides the same functionality as"           \
           "'numactl --all -N <nodes> -m <nodes>'."                      \
           "<nodes> can be '0-2', '0,1,2', 'all' and so on.")            \
@@ -232,7 +232,7 @@ constexpr uint string_case_backend_value(StringCaseBackend backend) {
   product(intx, NUMAMemNodesRandom, 0,                                  \
           "Number of continuous nodes to bind to memory"                \
           "with the first N nodes chosen by NUMANodesRandom.")          \
-  product(ccstr, NUMABindPolicy, NULL,                                  \
+  product(ccstr, NUMABindPolicy, nullptr,                                  \
           "Enable deterministic NUMA placement with combined Options,"  \
           "including prefix=<id> and div=<N>.")                         \
                                                                         \

@@ -41,8 +41,8 @@ JBoltStartDCmd::JBoltStartDCmd(outputStream* output, bool heap) : DCmdWithParser
 
 int JBoltStartDCmd::num_arguments() {
   ResourceMark rm;
-  JBoltStartDCmd* dcmd = new JBoltStartDCmd(NULL, false);
-  if (dcmd != NULL) {
+  JBoltStartDCmd* dcmd = new JBoltStartDCmd(nullptr, false);
+  if (dcmd != nullptr) {
     DCmdMark mark(dcmd);
     return dcmd->_dcmdparser.num_arguments();
   } else {
@@ -159,14 +159,14 @@ void JBoltAbortDCmd::print_help(const char* name) const {
 }
 
 JBoltDumpDCmd::JBoltDumpDCmd(outputStream* output, bool heap) : DCmdWithParser(output, heap),
-  _filename("filename", "Name of the file to which the flight recording data is dumped", "STRING", true, NULL) {
+  _filename("filename", "Name of the file to which the flight recording data is dumped", "STRING", true, nullptr) {
   _dcmdparser.add_dcmd_option(&_filename);
 }
 
 int JBoltDumpDCmd::num_arguments() {
   ResourceMark rm;
-  JBoltDumpDCmd* dcmd = new JBoltDumpDCmd(NULL, false);
-  if (dcmd != NULL) {
+  JBoltDumpDCmd* dcmd = new JBoltDumpDCmd(nullptr, false);
+  if (dcmd != nullptr) {
     DCmdMark mark(dcmd);
     return dcmd->_dcmdparser.num_arguments();
   } else {
@@ -187,7 +187,7 @@ void JBoltDumpDCmd::execute(DCmdSource source, TRAPS) {
 
   const char* path = _filename.value();
   char buffer[PATH_MAX];
-  char* rp = NULL;
+  char* rp = nullptr;
 
   JBoltErrorCode ec = JBoltManager::dump_order_in_jcmd(path);
   switch (ec) {
@@ -195,7 +195,7 @@ void JBoltDumpDCmd::execute(DCmdSource source, TRAPS) {
       output()->print_cr("Failed: No order applied by JBolt now.");
       break;
     case JBoltOpenFileError:
-      output()->print_cr("Failed: File open error or NULL: %s", path);
+      output()->print_cr("Failed: File open error or nullptr: %s", path);
       break;
     case JBoltOK:
 #ifdef __linux__

@@ -3475,18 +3475,18 @@ jint Arguments::match_special_option_and_act(const JavaVMInitArgs* args,
       // HeapDumpRedact arguments.
       if (!HeapRedactor::check_launcher_heapdump_redact_support(tail)) {
         warning("Heap dump redacting did not setup properly, using wrong argument?");
-        vm_exit_during_initialization("Syntax error, expecting -XX:HeapDumpRedact=[off|names|basic|full|diyrules|annotation]",NULL);
+        vm_exit_during_initialization("Syntax error, expecting -XX:HeapDumpRedact=[off|names|basic|full|diyrules|annotation]",nullptr);
       }
       continue;
     }
 
     // heapDump redact password
     if(match_option(option, "-XX:RedactPassword=", &tail)) {
-      if(tail == NULL || strlen(tail) == 0) {
+      if(tail == nullptr || strlen(tail) == 0) {
         VerifyRedactPassword = false;
       } else {
         char* split_char = strstr(const_cast<char*>(tail), ",");
-        VerifyRedactPassword = !(split_char == NULL || strlen(split_char) < SALT_LEN);
+        VerifyRedactPassword = !(split_char == nullptr || strlen(split_char) < SALT_LEN);
       }
       if(!VerifyRedactPassword) {
         jio_fprintf(defaultStream::output_stream(), "redact password is null or with bad format, disable verify heap dump authority.\n");
@@ -3807,9 +3807,9 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   }
 
 #ifdef AARCH64
-  if (NUMANodes != NULL || NUMANodesRandom != 0) {
+  if (NUMANodes != nullptr || NUMANodesRandom != 0) {
     const char* numa_chosen_env = getenv("_JVM_NUMA_BINDING_DONE");
-    if (numa_chosen_env == NULL || strcmp(numa_chosen_env, "1") != 0) {
+    if (numa_chosen_env == nullptr || strcmp(numa_chosen_env, "1") != 0) {
       if (!UseNUMA) {
         UseNUMA = true;
       }

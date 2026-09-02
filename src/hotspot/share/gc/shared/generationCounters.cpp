@@ -59,7 +59,7 @@ GenerationCounters::GenerationCounters(const char* name,
       _max_size = PerfDataManager::create_variable(SUN_GC, cname, PerfData::U_Bytes,
                                                    max_capacity, CHECK);
     } else {
-      _max_size = NULL;
+      _max_size = nullptr;
       PerfDataManager::create_constant(SUN_GC, cname, PerfData::U_Bytes,
                                        max_capacity, CHECK);
     }

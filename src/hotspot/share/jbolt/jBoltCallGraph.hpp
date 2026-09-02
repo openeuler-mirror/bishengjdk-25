@@ -36,7 +36,7 @@ class JBoltCluster;
 template<typename T>
 static GrowableArray<T>* create_growable_array(int size = 1) {
   GrowableArray<T>* array = new (mtTracing) GrowableArray<T>(size, mtTracing);
-  assert(array != NULL, "invariant");
+  assert(array != nullptr, "invariant");
   return array;
 }
 
@@ -45,9 +45,9 @@ static u4 _init_cluster_id = 0;
 
 class JBoltCallGraph : public CHeapObj<mtTracing> {
   private:
-    GrowableArray<JBoltCluster>* _clusters = NULL;
-    GrowableArray<JBoltCall>* _calls = NULL;
-    GrowableArray<JBoltFunc>* _funcs = NULL;
+    GrowableArray<JBoltCluster>* _clusters = nullptr;
+    GrowableArray<JBoltCall>* _calls = nullptr;
+    GrowableArray<JBoltFunc>* _funcs = nullptr;
 
     JBoltCallGraph() {
         _clusters = create_growable_array<JBoltCluster>();
@@ -85,9 +85,9 @@ class JBoltCallGraph : public CHeapObj<mtTracing> {
         delete _calls;
         delete _funcs;
 
-        _clusters = NULL;
-        _calls = NULL;
-        _funcs = NULL;
+        _clusters = nullptr;
+        _calls = nullptr;
+        _funcs = nullptr;
     }
 };
 
