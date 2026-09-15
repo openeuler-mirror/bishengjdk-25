@@ -1343,7 +1343,14 @@ public final class String
             return encodeUTF8_UTF16SlowPath(val, doReplace);
         }
 
-        byte[] dst = new byte[len * 3 + 16]; // to avoid overruns on some special cases
+        // Keep the size calculation wide enough to avoid wrapping into a
+        // negative array size. The slow path can use the exact encoded length
+        // when this estimate, including vector-store padding, exceeds the limit.
+        long allocLen = (long) len * 3 + 16;
+        if (allocLen > (long) Integer.MAX_VALUE) {
+            return encodeUTF8_UTF16SlowPath(val, doReplace);
+        }
+        byte[] dst = new byte[(int) allocLen]; // to avoid overruns on some special cases
         // 1 attempt to intrinsic solution. If failed -> use std java method
         int ret = StringCoding.implEncodeUtf8fromUtf16(val, 0, dst, 0, len);
 
