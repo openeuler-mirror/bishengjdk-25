@@ -336,10 +336,16 @@ void MetaspaceShared::initialize_for_static_dump() {
   }
 }
 
-void MetaspaceShared::open_output_mapinfo() {
+// Create the output map without creating the archive file.
+// Classic CDS opens the file only when archive bytes are ready to be written.
+void MetaspaceShared::create_output_mapinfo() {
   const char* static_archive = CDSConfig::output_archive_path();
   assert(static_archive != nullptr, "sanity");
   _output_mapinfo = new FileMapInfo(static_archive, true);
+}
+
+void MetaspaceShared::open_output_mapinfo() {
+  create_output_mapinfo();
   _output_mapinfo->open_as_output();
 }
 
@@ -1045,8 +1051,11 @@ void MetaspaceShared::preload_and_dump_impl(StaticArchiveBuilder& builder, TRAPS
   if (!CDSConfig::is_dumping_preimage_static_archive()) {
     if (CDSConfig::is_dumping_final_static_archive()) {
       FileMapInfo::free_current_info(); // FIXME: should not free current info
+      open_output_mapinfo();
+    } else {
+      // Classic CDS opens the archive after dump preparation completes.
+      create_output_mapinfo();
     }
-    open_output_mapinfo();
   }
 
   VM_PopulateDumpSharedSpace op(builder, _output_mapinfo);
@@ -1083,6 +1092,12 @@ bool MetaspaceShared::write_static_archive(ArchiveBuilder* builder, FileMapInfo*
   // relocate the data so that it can be mapped to MetaspaceShared::requested_base_address()
   // without runtime relocation.
   builder->relocate_to_requested();
+
+  // Open the classic CDS archive only after preparation and relocation.
+  if (CDSConfig::is_dumping_classic_static_archive() && !map_info->is_open()) {
+    map_info->open_as_output();
+  }
+
   if (!map_info->is_open()) {
     return false;
   }
