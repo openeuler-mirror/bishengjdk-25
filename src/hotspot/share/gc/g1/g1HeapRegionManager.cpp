@@ -619,7 +619,9 @@ bool G1HeapRegionManager::allocate_containing_regions(MemRegion range, size_t* c
       expand_exact(curr_index, 1, pretouch_workers);
     }
     G1HeapRegion* curr_region  = _regions.get_by_index(curr_index);
-    if (!curr_region->is_free()) {
+    // The region may still be unavailable if the dynamic heap cap
+    // prevented expansion.
+    if (!is_available(curr_index) || curr_region == nullptr || !curr_region->is_free()) {
       return false;
     }
   }
