@@ -1162,7 +1162,9 @@ static bool collect_same_mulv_leaves(Node* n, int opc, Node*& leaf, uint& leaves
     return false;
   }
   if (n->Opcode() == opc) {
-    return collect_same_mulv_leaves(n->in(1), opc, leaf, leaves, depth + 1) &&
+    // Inactive lanes of a predicated multiply keep the first input.
+    return !n->is_predicated_vector() &&
+           collect_same_mulv_leaves(n->in(1), opc, leaf, leaves, depth + 1) &&
            collect_same_mulv_leaves(n->in(2), opc, leaf, leaves, depth + 1);
   }
   if (leaf == nullptr) {
@@ -1180,7 +1182,7 @@ Node* VectorNode::Ideal(PhaseGVN* phase, bool can_reshape) {
     return try_to_gen_masked_vector(phase, this, vect_type());
   }
 
-  if (!is_predicated_vector() && Opcode() == Op_MulVL) {
+  if (Opcode() == Op_MulVL) {
     Node* leaf = nullptr;
     uint leaves = 0;
     if (collect_same_mulv_leaves(this, Opcode(), leaf, leaves, 0) && leaves == 4) {
