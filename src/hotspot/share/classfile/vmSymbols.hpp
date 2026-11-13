@@ -451,6 +451,7 @@ class SerializeClosure;
   template(utf_conversion_intrinsics_name,            "UTF_CONVERSION_INTRINSICS")                \
   template(string_case_intrinsics_name,               "STRING_CASE_INTRINSICS")                   \
   template(string_equals_ignore_case_intrinsics_name, "STRING_EQUALS_IGNORE_CASE_INTRINSICS")     \
+  template(string_equals_ignore_case_min_length_name, "STRING_EQUALS_IGNORE_CASE_MIN_LENGTH")     \
   template(numberOfLeadingZeros_name,                 "numberOfLeadingZeros")                     \
   template(numberOfTrailingZeros_name,                "numberOfTrailingZeros")                    \
   template(bitCount_name,                             "bitCount")                                 \
